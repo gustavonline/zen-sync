@@ -28,3 +28,4 @@ weave/
 # These are re-generated on startup, syncing them causes corruption/conflicts
 *.sqlite-wal
 *.sqlite-shm
+xulstore.json
