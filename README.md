@@ -1,55 +1,75 @@
 # Zen Browser Sync
 
-This repository contains your Zen Browser profile and sync scripts.
+This repository contains your Zen Browser profile and sync scripts. It allows you to keep your bookmarks, history, and extensions in sync between macOS and Windows using GitHub.
 
-## Structure
-- `profile/`: The actual browser profile files.
+## 📂 Structure
+- `profile/`: The actual browser profile files (linked to your system).
 - `scripts/`: Sync scripts for macOS and Windows.
+- `setup_mac.sh` / `setup_win.ps1`: One-time setup scripts.
 
-## Setup
+---
 
-### macOS (Host Setup)
-1. **Close Zen Browser.**
-2. Run the setup script:
+## 🍎 macOS Setup (Host)
+
+1. **Close Zen Browser** completely (Cmd+Q).
+2. Open Terminal and run the setup script:
    ```bash
-   ./setup_mac.sh
+   ~/ZenSync/setup_mac.sh
    ```
-3. Add your GitHub remote:
-   ```bash
-   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-   ```
-4. **Usage:** Instead of clicking the Zen icon, run `scripts/zen-sync-mac.sh`. (See "Application Shortcut" below).
+   *This links your existing profile to this folder.*
 
-### Windows (Client Setup)
-1. Clone this repository to `%USERPROFILE%\ZenSync`.
+3. **Create the Dock App:**
+   Run the helper script to create "Zen Sync.app" in your Applications folder:
+   ```bash
+   ~/ZenSync/create_mac_app.sh
+   ```
+4. **Usage:**
+   - Drag **"Zen Sync"** from your Applications folder to your Dock.
+   - Use this icon to launch Zen. It will auto-sync before opening and after closing.
+
+---
+
+## 🪟 Windows Setup (Client)
+
+1. **Clone the Repo:**
+   Open PowerShell and clone this repo to your home directory:
    ```powershell
    git clone <REPO_URL> $HOME\ZenSync
    ```
+
 2. **Close Zen Browser.**
-3. Run the automatic setup script in PowerShell:
+
+3. **Run the Magic Setup:**
    ```powershell
    cd $HOME\ZenSync
    .\setup_win.ps1
    ```
-   *This script will automatically find your profile ID, back it up, and link it to the sync folder.*
+   *This automatically finds your Zen profile, backs it up, and links it to the synced folder.*
 
-4. **Usage:**
-   **Option 1 (Quick Run):**
-   Open PowerShell and type:
-   ```powershell
-   & "$HOME\ZenSync\scripts\zen-sync-win.ps1"
-   ```
-
-   **Option 2 (Create Shortcut):**
+4. **Create the Shortcut (Silent Launch):**
+   To launch Zen without seeing a black terminal window:
+   
    - Right-click Desktop -> **New** -> **Shortcut**.
-   - Paste this as the location:
-     `powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "%USERPROFILE%\ZenSync\scripts\zen-sync-win.ps1"`
-   - Name it **"Zen Sync"**.
-   - (Optional) Right-click it -> Properties -> Change Icon -> Find `zen.exe`.
+   - **Target:** 
+     ```cmd
+     wscript.exe "%USERPROFILE%\ZenSync\scripts\zen-silent-launch.vbs"
+     ```
+   - **Name:** "Zen Sync"
+   - Click **Finish**.
 
-## Troubleshooting
-- **Merge Conflicts:** If you leave the browser open on both machines, conflicts will happen. The script tries to `git pull --rebase`, but if it fails, you may need to manually fix conflicts in the `profile` folder.
-- **Lock Files:** If Zen complains it is already running, check for `parent.lock` files in the `profile` directory and delete them if you are sure it's closed.
+   **Make it look nice (Optional):**
+   - Right-click the new shortcut -> **Properties** -> **Change Icon**.
+   - Browse to: `%APPDATA%\..\Local\Zen\Application\zen.exe` (or wherever you installed Zen) and select the logo.
+   - Pin this to your Taskbar.
 
-# OpenCode Session
-https://opncd.ai/share/rGOXMy1C
+---
+
+## ℹ️ How it Works
+1. **Launch:** The script runs `git pull` to get the latest changes from GitHub.
+2. **Browse:** Zen Browser opens.
+3. **Close:** When you close Zen, the script wakes up, runs `git commit` and `git push`.
+
+### Notes
+- **Window Sizes:** Window sizes and positions are **not** synced (`xulstore.json` is ignored). This allows you to have different layouts on Mac and Windows.
+- **Merge Conflicts:** Always close Zen on one device before opening it on another. "Last one to close wins."
+- **Troubleshooting:** If the sync fails, check the `README.md` or manually run `git pull` in the folder to see errors.
