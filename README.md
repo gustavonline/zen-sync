@@ -25,25 +25,16 @@ This repository contains your Zen Browser profile and sync scripts.
    ```powershell
    git clone <REPO_URL> $HOME\ZenSync
    ```
-2. Locate your Zen Browser profile folder (usually in `%APPDATA%\Zen\Profiles\xxxx.default`).
-3. **Close Zen Browser.**
-4. Rename your existing profile folder to `backup_profile`.
-5. Create a specific directory junction (symlink) to the repo profile:
+2. **Close Zen Browser.**
+3. Run the automatic setup script in PowerShell:
    ```powershell
-   New-Item -ItemType Junction -Path "C:\Users\YOUR_USER\AppData\Roaming\Zen\Profiles\YOUR_PROFILE_ID.default" -Target "$HOME\ZenSync\profile"
+   cd $HOME\ZenSync
+   .\setup_win.ps1
    ```
-   *(Note: You might need to update `profiles.ini` in the Zen AppData folder to point to the correct profile path if names differ).*
+   *This script will automatically find your profile ID, back it up, and link it to the sync folder.*
 
-## Usage
-
-### macOS
-Run the **Zen Sync** app (created via Automator) or run:
-```bash
-~/ZenSync/scripts/zen-sync-mac.sh
-```
-
-### Windows
-Right-click `scripts/zen-sync-win.ps1` -> "Run with PowerShell" or create a shortcut to it.
+4. **Usage:**
+   Right-click `scripts/zen-sync-win.ps1` -> "Run with PowerShell" or create a shortcut to it.
 
 ## Troubleshooting
 - **Merge Conflicts:** If you leave the browser open on both machines, conflicts will happen. The script tries to `git pull --rebase`, but if it fails, you may need to manually fix conflicts in the `profile` folder.
