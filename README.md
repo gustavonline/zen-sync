@@ -34,7 +34,18 @@ This repository contains your Zen Browser profile and sync scripts.
    *This script will automatically find your profile ID, back it up, and link it to the sync folder.*
 
 4. **Usage:**
-   Right-click `scripts/zen-sync-win.ps1` -> "Run with PowerShell" or create a shortcut to it.
+   **Option 1 (Quick Run):**
+   Open PowerShell and type:
+   ```powershell
+   & "$HOME\ZenSync\scripts\zen-sync-win.ps1"
+   ```
+
+   **Option 2 (Create Shortcut):**
+   - Right-click Desktop -> **New** -> **Shortcut**.
+   - Paste this as the location:
+     `powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "%USERPROFILE%\ZenSync\scripts\zen-sync-win.ps1"`
+   - Name it **"Zen Sync"**.
+   - (Optional) Right-click it -> Properties -> Change Icon -> Find `zen.exe`.
 
 ## Troubleshooting
 - **Merge Conflicts:** If you leave the browser open on both machines, conflicts will happen. The script tries to `git pull --rebase`, but if it fails, you may need to manually fix conflicts in the `profile` folder.
