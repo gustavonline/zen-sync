@@ -65,4 +65,7 @@ New-Item -ItemType Junction -Path $LinkPath -Target $ProfileRepo | Out-Null
 
 Write-Host ""
 Write-Host "Success! Windows setup is complete." -ForegroundColor Green
-Write-Host "You can now run $ZenSyncDir\scripts\zen-sync-win.ps1 to start Zen."
+$ScriptPath = "$ZenSyncDir\scripts\zen-sync-win.ps1"
+Write-Host "You can now run this script to start Zen:"
+Write-Host $ScriptPath -ForegroundColor Cyan
+
