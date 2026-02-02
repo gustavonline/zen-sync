@@ -38,12 +38,12 @@ while ($true) {
             Write-Log "Zen Browser STARTED. Sync paused."
             $WasRunning = $true
         }
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 1
     }
     else {
         if ($WasRunning) {
             Write-Log "Zen Browser CLOSED. Syncing..."
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds 1
             
             git add .
             $Status = git status --porcelain

@@ -47,12 +47,12 @@ while true; do
             log "Zen Browser STARTED. Sync paused."
             WAS_RUNNING=true
         fi
-        sleep 5
+        sleep 1
     else
         # Zen is NOT running
         if [ "$WAS_RUNNING" = "true" ]; then
             log "Zen Browser CLOSED. Syncing..."
-            sleep 2 # Wait for file locks
+            sleep 1 # Wait for file locks
             
             # 1. Commit Local Changes
             git add .
