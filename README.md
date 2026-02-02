@@ -48,3 +48,6 @@ Right-click `scripts/zen-sync-win.ps1` -> "Run with PowerShell" or create a shor
 ## Troubleshooting
 - **Merge Conflicts:** If you leave the browser open on both machines, conflicts will happen. The script tries to `git pull --rebase`, but if it fails, you may need to manually fix conflicts in the `profile` folder.
 - **Lock Files:** If Zen complains it is already running, check for `parent.lock` files in the `profile` directory and delete them if you are sure it's closed.
+
+# OpenCode Session
+https://opncd.ai/share/rGOXMy1C
