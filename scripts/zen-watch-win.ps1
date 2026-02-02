@@ -12,7 +12,7 @@ Set-Location $RepoDir
 function Write-Log {
     Param ($Message)
     $TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    Add-Content -Path $LogFile -Value "$TimeStamp: $Message"
+    Add-Content -Path $LogFile -Value "${TimeStamp}: $Message"
 }
 
 function Rotate-Log {
