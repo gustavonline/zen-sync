@@ -54,10 +54,10 @@ while ($true) {
                 # Capture Push Output
                 $Push = git push 2>&1
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Log "✅ Push successful."
+                    Write-Log "[SUCCESS] Push successful."
                     # Optional: Add BurntToast notification here if installed
                 } else {
-                    Write-Log "❌ Push failed: $Push"
+                    Write-Log "[ERROR] Push failed: $Push"
                 }
             } else {
                 Write-Log "No local changes to push."
