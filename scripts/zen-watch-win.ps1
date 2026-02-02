@@ -66,7 +66,7 @@ while ($true) {
         }
         
         # Idle: Pull updates
-        git pull --rebase --autostash *>$null 2>&1
+        git pull --rebase --autostash 2>&1 | Out-Null
         
         Start-Sleep -Seconds $PollInterval
     }
