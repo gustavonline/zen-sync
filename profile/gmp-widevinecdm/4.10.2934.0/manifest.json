@@ -20,19 +20,24 @@
   },
   "platforms": [
     {
-      "os": "mac",
+      "os": "win",
       "arch": "x64",
-      "sub_package_path": "_platform_specific/mac_x64/"
+      "sub_package_path": "_platform_specific/win_x64/"
     },
     {
-      "os": "mac",
+      "os": "win",
+      "arch": "x86",
+      "sub_package_path": "_platform_specific/win_x86/"
+    },
+    {
+      "os": "win",
       "arch": "arm64",
-      "sub_package_path": "_platform_specific/mac_arm64/"
+      "sub_package_path": "_platform_specific/win_arm64/"
     }
   ],
   "accept_arch": [
-    "arm64",
-    "arm64e",
-    "aarch64"
+    "x64",
+    "x86_64",
+    "x86_64h"
   ]
 }
