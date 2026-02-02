@@ -46,6 +46,6 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 If you get merge conflicts that won't go away:
 ```bash
 git fetch origin
-git reset --hard origin/master
+git reset --hard origin/main
 ```
 *(This resets your local state to match the cloud).*
