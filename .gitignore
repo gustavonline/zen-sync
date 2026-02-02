@@ -1,0 +1,30 @@
+# Ignore Caches and Temporary Files
+cache/
+caches/
+startupCache/
+thumbnails/
+*.tmp
+*.bak
+*.log
+
+# Ignore Lock Files (Critical for preventing sync issues)
+lock
+.parentlock
+parent.lock
+
+# Ignore Storage/Site Data (Too large/variable for Git, usually)
+# Uncomment the line below if you want to sync site storage (LocalStorage, IndexedDB)
+# storage/
+safebrowsing/
+datareporting/
+saved-telemetry-pings/
+crashes/
+minidumps/
+
+# Ignore Sync Logs
+weave/
+
+# Ignore Sqlite Temporary Files (Write-Ahead Logs)
+# These are re-generated on startup, syncing them causes corruption/conflicts
+*.sqlite-wal
+*.sqlite-shm
