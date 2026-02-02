@@ -1,64 +1,86 @@
 #!/bin/bash
 
-# Configuration
+# ==========================================
+# Zen Sync Watcher (macOS) - v2.0
+# ==========================================
+
 REPO_DIR="$HOME/ZenSync"
-# Interval to check for updates when Zen is NOT running (seconds)
-POLL_INTERVAL=60
+LOG_FILE="/tmp/zen-sync.log"
+MAX_LOG_SIZE=524288 # 512KB
+POLL_INTERVAL=30    # Check every 30 seconds
 
-cd "$REPO_DIR" || exit
+# Ensure we are in the right place
+cd "$REPO_DIR" || exit 1
 
-echo "Starting Zen Background Watcher..."
+# --- Helper Functions ---
 
-# State tracking
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG_FILE"
+}
+
+notify() {
+    osascript -e "display notification \"$1\" with title \"Zen Sync\""
+}
+
+rotate_log() {
+    if [ -f "$LOG_FILE" ]; then
+        SIZE=$(stat -f%z "$LOG_FILE")
+        if [ "$SIZE" -gt "$MAX_LOG_SIZE" ]; then
+            mv "$LOG_FILE" "$LOG_FILE.old"
+            log "Log rotated."
+        fi
+    fi
+}
+
+# --- Main Loop ---
+
+log "Watcher started."
 WAS_RUNNING=false
 
 while true; do
-    # Check if Zen is running
-    # We use pgrep. Note: Process name might be 'zen' or 'Zen'.
+    # Rotate logs if needed
+    rotate_log
+
+    # Check if Zen is running (case insensitive search)
     if pgrep -x "zen" > /dev/null || pgrep -x "Zen" > /dev/null; then
         if [ "$WAS_RUNNING" = "false" ]; then
-            echo "$(date): Zen Browser STARTED. Pausing updates."
+            log "Zen Browser STARTED. Sync paused."
             WAS_RUNNING=true
         fi
-        # While running, we just sleep. We DO NOT touch git.
         sleep 5
     else
-        # Zen is NOT running.
-        
+        # Zen is NOT running
         if [ "$WAS_RUNNING" = "true" ]; then
-            echo "$(date): Zen Browser CLOSED. Initiating Sync..."
+            log "Zen Browser CLOSED. Syncing..."
+            sleep 2 # Wait for file locks
             
-            # Wait a moment for locks to release
-            sleep 2
-            
-            # 1. Add and Commit
+            # 1. Commit Local Changes
             git add .
             if ! git diff-index --quiet HEAD --; then
-                git commit -m "Auto-Sync: $(date '+%Y-%m-%d %H:%M:%S')"
+                git commit -m "Auto-Sync: $(date '+%Y-%m-%d %H:%M')" >> "$LOG_FILE" 2>&1
                 
-                # 2. Push
-                echo "Pushing changes..."
-                if git push; then
-                    echo "✅ Push successful."
-                    # Optional: Notify user
-                    osascript -e 'display notification "Profile synced to cloud." with title "Zen Sync"'
+                # 2. Push to Cloud
+                if git push >> "$LOG_FILE" 2>&1; then
+                    log "✅ Push successful."
+                    notify "Profile synced to cloud."
                 else
-                    echo "❌ Push failed."
-                    osascript -e 'display notification "Sync failed. Check network." with title "Zen Sync"'
+                    log "❌ Push failed."
+                    notify "Sync failed. Check logs."
                 fi
             else
-                echo "No changes to push."
+                log "No local changes to push."
             fi
             
             WAS_RUNNING=false
         fi
         
-        # Idle Loop: Pull updates periodically
-        # We assume if the user hasn't opened Zen yet, it's safe to update the profile.
-        echo "$(date): Idle. Checking for updates..."
-        git pull --rebase --autostash > /dev/null 2>&1
+        # Idle: Pull updates from Cloud
+        # We use a quiet pull to avoid log spam, capturing error only if it fails
+        if ! git pull --rebase --autostash > /dev/null 2>&1; then
+            # If pull fails, log it but don't spam notifications
+            log "⚠️ Pull failed (network issue or conflict)."
+        fi
         
-        # Sleep until next poll
         sleep $POLL_INTERVAL
     fi
 done

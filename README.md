@@ -1,75 +1,51 @@
 # Zen Browser Sync
 
-This repository contains your Zen Browser profile and sync scripts. It allows you to keep your bookmarks, history, and extensions in sync between macOS and Windows using GitHub.
+Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub. 
 
-## 📂 Structure
-- `profile/`: The actual browser profile files (linked to your system).
-- `scripts/`: Sync scripts for macOS and Windows.
-- `setup_mac.sh` / `setup_win.ps1`: One-time setup scripts.
-
----
-
-## 🍎 macOS Setup (Host)
-
-1. **Close Zen Browser** completely (Cmd+Q).
-2. Open Terminal and run the setup script:
-   ```bash
-   ~/ZenSync/setup_mac.sh
-   ```
-   *This links your existing profile to this folder.*
-
-3. **Create the Dock App:**
-   Run the helper script to create "Zen Sync.app" in your Applications folder:
-   ```bash
-   ~/ZenSync/create_mac_app.sh
-   ```
-4. **Usage:**
-   - Drag **"Zen Sync"** from your Applications folder to your Dock.
-   - Use this icon to launch Zen. It will auto-sync before opening and after closing.
+## ✨ Features
+*   **Invisible:** Runs in the background. No special apps to click.
+*   **Conflict-Free:** Automatic handling of file locks and merge updates.
+*   **Clean:** Ignores caches, lock files, and machine-specific window sizes (`xulstore.json`).
 
 ---
 
-## 🪟 Windows Setup (Client)
+## 🚀 Installation
 
-1. **Clone the Repo:**
-   Open PowerShell and clone this repo to your home directory:
-   ```powershell
-   git clone <REPO_URL> $HOME\ZenSync
-   ```
+### 🍎 macOS
+1.  **Close Zen Browser.**
+2.  Run the installer:
+    ```bash
+    cd ~/ZenSync
+    ./install_mac.sh
+    ```
+3.  That's it! Open Zen Browser normally.
 
-2. **Close Zen Browser.**
-
-3. **Run the Magic Setup:**
-   ```powershell
-   cd $HOME\ZenSync
-   .\setup_win.ps1
-   ```
-   *This automatically finds your Zen profile, backs it up, and links it to the synced folder.*
-
-4. **Create the Shortcut (Silent Launch):**
-   To launch Zen without seeing a black terminal window:
-   
-   - Right-click Desktop -> **New** -> **Shortcut**.
-   - **Target:** 
-     ```cmd
-     wscript.exe "%USERPROFILE%\ZenSync\scripts\zen-silent-launch.vbs"
-     ```
-   - **Name:** "Zen Sync"
-   - Click **Finish**.
-
-   **Make it look nice (Optional):**
-   - Right-click the new shortcut -> **Properties** -> **Change Icon**.
-   - Browse to: `%APPDATA%\..\Local\Zen\Application\zen.exe` (or wherever you installed Zen) and select the logo.
-   - Pin this to your Taskbar.
+### 🪟 Windows
+1.  **Close Zen Browser.**
+2.  Open PowerShell as Admin (recommended) or User.
+3.  Run the installer:
+    ```powershell
+    cd $HOME\ZenSync
+    .\install_win.ps1
+    ```
+4.  **One-time start:** Double-click the "ZenSync" shortcut in your `Startup` folder (or reboot).
 
 ---
 
-## ℹ️ How it Works
-1. **Launch:** The script runs `git pull` to get the latest changes from GitHub.
-2. **Browse:** Zen Browser opens.
-3. **Close:** When you close Zen, the script wakes up, runs `git commit` and `git push`.
+## ❓ Troubleshooting
 
-### Notes
-- **Window Sizes:** Window sizes and positions are **not** synced (`xulstore.json` is ignored). This allows you to have different layouts on Mac and Windows.
-- **Merge Conflicts:** Always close Zen on one device before opening it on another. "Last one to close wins."
-- **Troubleshooting:** If the sync fails, check the `README.md` or manually run `git pull` in the folder to see errors.
+**How do I know it's working?**
+*   **macOS:** You will see a notification "Profile synced to cloud" when you close Zen. Log file: `/tmp/zen-sync.log`.
+*   **Windows:** Log file: `~/ZenSync/zen-sync.log`.
+
+**Files not syncing?**
+*   Check the log files mentioned above.
+*   Ensure you didn't leave Zen open on the *other* computer.
+
+**Resetting the Repo (If things break)**
+If you get merge conflicts that won't go away:
+```bash
+git fetch origin
+git reset --hard origin/master
+```
+*(This resets your local state to match the cloud).*
