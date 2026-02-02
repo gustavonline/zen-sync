@@ -1,0 +1,16 @@
+# Force unix style line endings for scripts
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.md text eol=lf
+*.vbs text eol=crlf
+
+# Treat database and binary files as binary (no line ending conversion)
+*.sqlite binary
+*.db binary
+*.lz4 binary
+*.bin binary
+*.jpg binary
+*.png binary
+*.ico binary
+*.dll binary
+*.dylib binary

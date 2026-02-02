@@ -12,20 +12,25 @@ lock
 .parentlock
 parent.lock
 
-# Ignore Storage/Site Data (Too large/variable for Git, usually)
-# Uncomment the line below if you want to sync site storage (LocalStorage, IndexedDB)
-# storage/
+# Ignore Storage/Site Data (Too large/variable for Git)
+storage/
 safebrowsing/
 datareporting/
 saved-telemetry-pings/
 crashes/
 minidumps/
+shader-cache/
 
-# Ignore Sync Logs
-weave/
-
-# Ignore Sqlite Temporary Files (Write-Ahead Logs)
-# These are re-generated on startup, syncing them causes corruption/conflicts
+# Ignore Sqlite Temporary Files
 *.sqlite-wal
 *.sqlite-shm
+
+# Ignore Window State
 xulstore.json
+
+# Sync Logs
+weave/
+
+# OS Specific
+.DS_Store
+Thumbs.db
