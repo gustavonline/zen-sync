@@ -5,7 +5,7 @@
 $RepoDir = "$HOME\ZenSync"
 $LogFile = "$RepoDir\zen-sync.log"
 $MaxLogSize = 500KB
-$PollInterval = 30 # Check every 30 seconds
+$PollInterval = 5 # Check every 5 seconds
 
 Set-Location $RepoDir
 

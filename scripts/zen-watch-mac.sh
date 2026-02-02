@@ -7,7 +7,7 @@
 REPO_DIR="$HOME/ZenSync"
 LOG_FILE="/tmp/zen-sync.log"
 MAX_LOG_SIZE=524288 # 512KB
-POLL_INTERVAL=30    # Check every 30 seconds
+POLL_INTERVAL=5    # Check every 5 seconds
 
 # Ensure we are in the right place
 cd "$REPO_DIR" || exit 1
