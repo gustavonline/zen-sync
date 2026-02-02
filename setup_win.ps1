@@ -64,5 +64,5 @@ Write-Host "🔗 Creating Link to Synced Profile..."
 New-Item -ItemType Junction -Path $LinkPath -Target $ProfileRepo | Out-Null
 
 Write-Host ""
-Write-Host "🎉 Success! Windows setup is complete." -ForegroundColor Green
-Write-Host "You can now run '$ZenSyncDir\scripts\zen-sync-win.ps1' to start Zen."
+Write-Host "Success! Windows setup is complete." -ForegroundColor Green
+Write-Host "You can now run $ZenSyncDir\scripts\zen-sync-win.ps1 to start Zen."
