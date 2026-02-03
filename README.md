@@ -6,7 +6,7 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 *   **Native CLI:** Node.js based tool.
 *   **Cross-Platform:** Works identically on macOS and Windows.
 *   **Smart Sync:** Automatically handles file locks and ignores caches.
-*   **Zero Conflict:** Syncs when you close the browser.
+*   **Auto Sync:** Continuous background sync (configurable).
 
 ## 🚀 Installation
 
@@ -23,7 +23,7 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
     ```bash
     npm install
     ```
-3.  Link the tool (optional, makes `zensync` available everywhere):
+3.  Link the tool globally:
     ```bash
     npm link
     ```
@@ -40,12 +40,33 @@ Run this in the background to enable sync:
 zensync watch
 ```
 
-(You can use `pm2` or a startup script to run this automatically on boot).
-
 ### Configuration
-Config is stored in your system's default config directory (e.g., `~/.config/zensync` or `AppData`).
+Enable Auto-Sync (e.g. every 10 mins):
+```bash
+zensync config
+```
+
+### 🔄 Auto-Start on Boot (Recommended)
+We recommend using **PM2** to keep ZenSync running in the background.
+
+1.  Install PM2:
+    ```bash
+    npm install -g pm2
+    ```
+2.  Start ZenSync:
+    ```bash
+    pm2 start zensync --name "zensync" -- watch
+    ```
+3.  Save configuration:
+    ```bash
+    pm2 save
+    ```
+4.  Generate startup script:
+    ```bash
+    pm2 startup
+    ```
+    (Run the command displayed by PM2).
 
 ## 🛠 Development
-This tool is built with Node.js.
 *   `src/cli.js`: Entry point.
 *   `src/lib/`: Core logic.
