@@ -7,6 +7,16 @@ import chalk from 'chalk';
 const APP_NAME = 'com.gustavonline.zensync';
 const WIN_SHORTCUT_NAME = 'ZenSync.lnk';
 
+const LEGACY_FILES = {
+    darwin: [
+        'com.gustav.zen-sync.plist', // From old install_mac.sh
+        'zensync.plist'
+    ],
+    win32: [
+        // Add any old shortcut names here if known
+    ]
+};
+
 function getStartupPath() {
     if (process.platform === 'darwin') {
         return path.join(os.homedir(), 'Library', 'LaunchAgents', `${APP_NAME}.plist`);
@@ -16,7 +26,34 @@ function getStartupPath() {
     return null;
 }
 
+async function cleanupLegacy() {
+    const platform = process.platform;
+    if (!LEGACY_FILES[platform]) return;
+
+    for (const file of LEGACY_FILES[platform]) {
+        let legacyPath;
+        if (platform === 'darwin') {
+            legacyPath = path.join(os.homedir(), 'Library', 'LaunchAgents', file);
+        } else if (platform === 'win32') {
+            legacyPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', file);
+        }
+
+        if (legacyPath && fs.existsSync(legacyPath)) {
+            console.log(chalk.yellow(`Removing legacy startup file: ${file}`));
+            try {
+                if (platform === 'darwin') {
+                    await execa('launchctl', ['unload', legacyPath]).catch(() => {});
+                }
+                fs.unlinkSync(legacyPath);
+            } catch (e) {
+                console.error(chalk.red(`Failed to remove legacy file ${file}:`), e.message);
+            }
+        }
+    }
+}
+
 export async function enableStartup() {
+    await cleanupLegacy();
     const startupPath = getStartupPath();
     if (!startupPath) {
         console.log(chalk.red('Startup configuration is only supported on macOS and Windows.'));
@@ -103,6 +140,7 @@ oLink.Save
 }
 
 export async function disableStartup() {
+    await cleanupLegacy();
     const startupPath = getStartupPath();
     if (startupPath && fs.existsSync(startupPath)) {
         if (process.platform === 'darwin') {
