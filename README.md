@@ -7,6 +7,7 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 *   **Cross-Platform:** Works identically on macOS and Windows.
 *   **Smart Sync:** Automatically handles file locks and ignores caches.
 *   **Auto Sync:** Continuous background sync (configurable).
+*   **Auto Start:** Native startup integration (LaunchAgent / Startup Shortcut).
 
 ## 🚀 Installation
 
@@ -34,38 +35,40 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 
 ## 🎮 Usage
 
-### Start Watcher
-Run this in the background to enable sync:
+### 🟢 Start & Stop
+Run the watcher in the background:
 ```bash
-zensync watch
+zensync start
 ```
 
-### Configuration
-Enable Auto-Sync (e.g. every 10 mins):
+Stop the background watcher:
+```bash
+zensync stop
+```
+
+### 📊 Status & Logs
+Check if it's running and when it last synced:
+```bash
+zensync status
+```
+
+View recent log activity:
+```bash
+zensync logs
+```
+
+### ⚡ Auto-Start (Recommended)
+Make ZenSync start automatically when you turn on your computer:
+```bash
+zensync startup
+```
+*(To disable: `zensync uninstall`)*
+
+### ⚙️ Configuration
+Set the Auto-Sync interval (e.g. every 10 mins):
 ```bash
 zensync config
 ```
-
-### 🔄 Auto-Start on Boot (Recommended)
-We recommend using **PM2** to keep ZenSync running in the background.
-
-1.  Install PM2:
-    ```bash
-    npm install -g pm2
-    ```
-2.  Start ZenSync:
-    ```bash
-    pm2 start zensync --name "zensync" -- watch
-    ```
-3.  Save configuration:
-    ```bash
-    pm2 save
-    ```
-4.  Generate startup script:
-    ```bash
-    pm2 startup
-    ```
-    (Run the command displayed by PM2).
 
 ## 🛠 Development
 *   `src/cli.js`: Entry point.
