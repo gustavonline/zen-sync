@@ -23,6 +23,9 @@ async function performSync(repoPath, message, notify = true) {
         if (await hasChanges(repoPath)) {
             const committed = await gitCommit(repoPath, message);
             if (committed) {
+                // Pull remote changes to avoid conflicts if device was asleep/offline
+                await gitPull(repoPath);
+                
                 const pushed = await gitPush(repoPath);
                 if (pushed) {
                     log('✅ Synced to cloud.', 'success');
