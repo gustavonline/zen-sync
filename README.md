@@ -1,51 +1,51 @@
-# Zen Browser Sync
+# ZenSync (CLI)
 
-Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub. 
+Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub.
 
 ## ✨ Features
-*   **Invisible:** Runs in the background. No special apps to click.
-*   **Conflict-Free:** Automatic handling of file locks and merge updates.
-*   **Clean:** Ignores caches, lock files, and machine-specific window sizes (`xulstore.json`).
-
----
+*   **Native CLI:** Node.js based tool.
+*   **Cross-Platform:** Works identically on macOS and Windows.
+*   **Smart Sync:** Automatically handles file locks and ignores caches.
+*   **Zero Conflict:** Syncs when you close the browser.
 
 ## 🚀 Installation
 
-### 🍎 macOS
-1.  **Close Zen Browser.**
-2.  Run the installer:
+### Prerequisites
+*   Node.js (v18+)
+*   Git
+
+### Setup
+1.  Navigate to this folder:
     ```bash
     cd ~/ZenSync
-    ./install_mac.sh
     ```
-3.  That's it! Open Zen Browser normally.
-
-### 🪟 Windows
-1.  **Close Zen Browser.**
-2.  Open PowerShell as Admin (recommended) or User.
-3.  Run the installer:
-    ```powershell
-    cd $HOME\ZenSync
-    .\install_win.ps1
+2.  Install dependencies:
+    ```bash
+    npm install
     ```
-4.  **One-time start:** Double-click the "ZenSync" shortcut in your `Startup` folder (or reboot).
+3.  Link the tool (optional, makes `zensync` available everywhere):
+    ```bash
+    npm link
+    ```
+4.  Run setup:
+    ```bash
+    zensync setup
+    ```
 
----
+## 🎮 Usage
 
-## ❓ Troubleshooting
-
-**How do I know it's working?**
-*   **macOS:** You will see a notification "Profile synced to cloud" when you close Zen. Log file: `/tmp/zen-sync.log`.
-*   **Windows:** Log file: `~/ZenSync/zen-sync.log`.
-
-**Files not syncing?**
-*   Check the log files mentioned above.
-*   Ensure you didn't leave Zen open on the *other* computer.
-
-**Resetting the Repo (If things break)**
-If you get merge conflicts that won't go away:
+### Start Watcher
+Run this in the background to enable sync:
 ```bash
-git fetch origin
-git reset --hard origin/main
+zensync watch
 ```
-*(This resets your local state to match the cloud).*
+
+(You can use `pm2` or a startup script to run this automatically on boot).
+
+### Configuration
+Config is stored in your system's default config directory (e.g., `~/.config/zensync` or `AppData`).
+
+## 🛠 Development
+This tool is built with Node.js.
+*   `src/cli.js`: Entry point.
+*   `src/lib/`: Core logic.
