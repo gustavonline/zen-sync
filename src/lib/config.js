@@ -8,8 +8,9 @@ const schema = {
 	zenPath: {
 		type: 'string'
 	},
-    lastSync: {
-        type: 'string'
+    autoSyncInterval: {
+        type: 'number',
+        default: 0 // 0 = Disabled, otherwise minutes
     }
 };
 
