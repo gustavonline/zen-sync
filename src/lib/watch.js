@@ -12,7 +12,8 @@ async function checkZen() {
     const list = await psList();
     const isRunning = list.find(p => {
         const name = p.name.toLowerCase();
-        return name === 'zen' || name === 'zen-bin' || name.includes('zen browser');
+        // Check for 'zen', 'zen.exe', 'zen-bin'
+        return name === 'zen' || name === 'zen.exe' || name === 'zen-bin' || name.includes('zen browser');
     });
     return !!isRunning;
 }
