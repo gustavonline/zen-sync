@@ -13,8 +13,9 @@ program
 
 program.command('setup')
   .description('Initialize ZenSync')
-  .action(async () => {
-    await setup();
+  .option('-y, --yes', 'Skip prompts and use current directory')
+  .action(async (options) => {
+    await setup(options);
   });
 
 program.command('config')
