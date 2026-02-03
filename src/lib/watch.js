@@ -39,7 +39,7 @@ async function performSync(repoPath, message, notify = true) {
                 }
             }
         } else {
-            // log('No local changes.', 'info'); // Too verbose for file log?
+            log('No changes found.', 'info');
         }
     } catch (error) {
         log(`Sync warning: ${error.message}`, 'warning');
