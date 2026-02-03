@@ -34,3 +34,4 @@ weave/
 # OS Specific
 .DS_Store
 Thumbs.db
+node_modules/

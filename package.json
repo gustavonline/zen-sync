@@ -1,0 +1,33 @@
+{
+  "name": "zensync",
+  "version": "1.0.0",
+  "description": "Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gustavonline/zen-sync.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gustavonline/zen-sync/issues"
+  },
+  "homepage": "https://github.com/gustavonline/zen-sync#readme",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "conf": "^15.0.2",
+    "execa": "^9.6.1",
+    "inquirer": "^13.2.2",
+    "node-notifier": "^10.0.1",
+    "ps-list": "^9.0.0"
+  },
+  "type": "module",
+  "bin": {
+    "zensync": "./src/cli.js"
+  }
+}
