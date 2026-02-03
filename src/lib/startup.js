@@ -84,7 +84,7 @@ Set oWS = WScript.CreateObject("WScript.Shell")
 sLinkFile = "${startupPath}"
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "${nodePath}"
-oLink.Arguments = "\"${targetScript}\" watch"
+oLink.Arguments = """${targetScript}"" watch"
 oLink.WorkingDirectory = "${path.dirname(targetScript)}"
 oLink.Description = "ZenSync Auto-Start"
 oLink.Save

@@ -34,7 +34,12 @@ export const log = (message, type = 'info') => {
         error: chalk.red
     }[type] || chalk.white;
     
-    return style(message);
+    const styledMessage = style(message);
+    
+    // Always log to console as well (for foreground usage)
+    console.log(styledMessage);
+
+    return styledMessage;
 };
 
 export const readLogs = (lines = 20) => {
