@@ -63,7 +63,7 @@ user_pref("browser.safebrowsing.provider.mozilla.lastupdatetime", "1770186695140
 user_pref("browser.safebrowsing.provider.mozilla.nextupdatetime", "1770208295140");
 user_pref("browser.search.region", "DK");
 user_pref("browser.search.serpEventTelemetryCategorization.regionEnabled", false);
-user_pref("browser.search.totalSearches", 86);
+user_pref("browser.search.totalSearches", 87);
 user_pref("browser.sessionstore.upgradeBackup.latestBuildID", "20260129100625");
 user_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);
 user_pref("browser.shell.mostRecentDateSetAsDefault", "1770186695");
@@ -75,7 +75,7 @@ user_pref("browser.tabs.inTitlebar", 1);
 user_pref("browser.termsofuse.prefMigrationCheck", true);
 user_pref("browser.toolbars.bookmarks.visibility", "always");
 user_pref("browser.uiCustomization.state", "{\"placements\":{\"widget-overflow-fixed-list\":[],\"unified-extensions-area\":[],\"nav-bar\":[\"back-button\",\"vertical-spacer\",\"forward-button\",\"stop-reload-button\",\"urlbar-container\",\"unified-extensions-button\",\"_testpilot-containers-browser-action\"],\"TabsToolbar\":[\"tabbrowser-tabs\"],\"vertical-tabs\":[],\"PersonalToolbar\":[\"personal-bookmarks\"],\"zen-sidebar-top-buttons\":[\"alltabs-button\",\"customizableui-special-spring6\",\"downloads-button\",\"sync-button\"],\"zen-sidebar-foot-buttons\":[\"developer-button\",\"zen-workspaces-button\",\"zen-create-new-button\"],\"toolbar-menubar\":[\"menubar-items\"]},\"seen\":[\"developer-button\",\"screenshot-button\",\"_testpilot-containers-browser-action\"],\"dirtyAreaCache\":[\"nav-bar\",\"vertical-tabs\",\"zen-sidebar-foot-buttons\",\"PersonalToolbar\",\"zen-sidebar-top-buttons\",\"widget-overflow-fixed-list\",\"TabsToolbar\",\"toolbar-menubar\"],\"currentVersion\":23,\"newElementCount\":16}");
-user_pref("browser.urlbar.lastUrlbarSearchSeconds", 1770208110);
+user_pref("browser.urlbar.lastUrlbarSearchSeconds", 1770209834);
 user_pref("browser.urlbar.placeholderName", "Google");
 user_pref("browser.urlbar.quicksuggest.migrationVersion", 6);
 user_pref("captchadetection.hasUnsubmittedData", false);
