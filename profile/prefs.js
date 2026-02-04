@@ -122,9 +122,9 @@ user_pref("identity.fxaccounts.lastSignedInUserHash", "sWNYIVNc/QGaMU3P1kAiECjYQ
 user_pref("idle.lastDailyNotification", 1770236646);
 user_pref("intl.locale.requested", "en-US,da");
 user_pref("media.gmp-gmpopenh264.lastDownload", 1770152973);
-user_pref("media.gmp-gmpopenh264.lastInstallStart", 1770152973);
-user_pref("media.gmp-manager.buildID", "20260129100625");
-user_pref("media.gmp-manager.lastCheck", 1770152973);
+user_pref("media.gmp-gmpopenh264.lastInstallStart", 1770242926);
+user_pref("media.gmp-manager.buildID", "20260203092256");
+user_pref("media.gmp-manager.lastCheck", 1770242926);
 user_pref("media.gmp-manager.lastEmptyCheck", 1770037866);
 user_pref("media.gmp-widevinecdm.lastDownload", 1770152973);
 user_pref("media.gmp-widevinecdm.lastInstallStart", 1770152973);
