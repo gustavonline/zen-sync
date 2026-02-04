@@ -18,7 +18,7 @@ user_pref("app.update.background.previous.reasons", "[\"unsupported OS\"]");
 user_pref("app.update.background.rolledout", true);
 user_pref("app.update.lastUpdateTime.addon-background-update-timer", 1770134866);
 user_pref("app.update.lastUpdateTime.background-update-timer", 1770186724);
-user_pref("app.update.lastUpdateTime.browser-cleanup-thumbnails", 1770194970);
+user_pref("app.update.lastUpdateTime.browser-cleanup-thumbnails", 1770207960);
 user_pref("app.update.lastUpdateTime.glean-addons-daily", 1770134866);
 user_pref("app.update.lastUpdateTime.region-update-timer", 1769947164);
 user_pref("app.update.lastUpdateTime.rs-experiment-loader-timer", 1770186695);
@@ -269,5 +269,5 @@ user_pref("zen.urlbar.suggestions-learner", "{\"zen:global-action-remove-from-es
 user_pref("zen.view.compact.enable-at-startup", false);
 user_pref("zen.view.use-single-toolbar", false);
 user_pref("zen.welcome-screen.seen", true);
-user_pref("zen.workspaces.active", "{5ba09051-99a7-43e0-b598-7b3a24a72293}");
+user_pref("zen.workspaces.active", "{6d45e9da-3aa2-4560-aeea-2b56820a2117}");
 user_pref("zen.workspaces.continue-where-left-off", true);
