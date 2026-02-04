@@ -114,14 +114,34 @@ export async function enableStartup() {
         }
 
     } else if (process.platform === 'win32') {
-        // Create VBS script to generate shortcut
+        // 1. Create a persistent VBS script that launches Node hidden
+        // We place it in the 'scripts' folder relative to the repo root
+        // targetScript is .../src/cli.js, so we go up one level
+        const scriptsDir = path.join(path.dirname(targetScript), '..', '..', 'scripts');
+        // Note: targetScript is src/cli.js. dirname is src. .. is root. scripts is root/scripts. 
+        // Wait, path.dirname('src/cli.js') -> 'src'. path.join('src', '..', 'scripts') -> 'scripts'. 
+        // But targetScript is absolute path. 
+        // Let's rely on path resolution.
+        
+        if (!fs.existsSync(scriptsDir)) {
+            fs.mkdirSync(scriptsDir, { recursive: true });
+        }
+        
+        const launcherPath = path.join(scriptsDir, 'launch-silent.vbs');
+        const launcherContent = `Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run """${nodePath}"" ""${targetScript}"" watch", 0, False
+`;
+        fs.writeFileSync(launcherPath, launcherContent);
+
+        // 2. Create the Startup Shortcut pointing to the VBS launcher
+        // Use wscript.exe to run the .vbs file (which runs Node hidden)
         const vbsScript = path.join(os.tmpdir(), 'create_shortcut.vbs');
         const vbsContent = `
 Set oWS = WScript.CreateObject("WScript.Shell")
 sLinkFile = "${startupPath}"
 Set oLink = oWS.CreateShortcut(sLinkFile)
-oLink.TargetPath = "${nodePath}"
-oLink.Arguments = """${targetScript}"" watch"
+oLink.TargetPath = "wscript.exe"
+oLink.Arguments = """${launcherPath}"""
 oLink.WorkingDirectory = "${path.dirname(targetScript)}"
 oLink.Description = "ZenSync Auto-Start"
 oLink.Save
@@ -130,7 +150,9 @@ oLink.Save
         
         try {
             await execa('cscript', ['//Nologo', vbsScript]);
-            console.log(chalk.green(`✅ Enabled startup! (Shortcut: ${startupPath})`));
+            console.log(chalk.green(`✅ Enabled startup! (Hidden Mode)`));
+            console.log(chalk.gray(`  Shortcut: ${startupPath}`));
+            console.log(chalk.gray(`  Launcher: ${launcherPath}`));
         } catch (e) {
             console.error(chalk.red('Failed to create shortcut:'), e.message);
         } finally {
