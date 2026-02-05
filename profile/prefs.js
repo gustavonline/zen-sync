@@ -126,7 +126,7 @@ user_pref("identity.fxaccounts.account.device.name", "gustavanderson’s Zen on 
 user_pref("identity.fxaccounts.account.telemetry.sanitized_uid", "1aeafa45fcc5968de4a3f7afcd033a9d");
 user_pref("identity.fxaccounts.commands.missed.last_fetch", 1770293633);
 user_pref("identity.fxaccounts.lastSignedInUserHash", "sWNYIVNc/QGaMU3P1kAiECjYQ/WvQVdDmo7EKLI7Log=");
-user_pref("idle.lastDailyNotification", 1770236646);
+user_pref("idle.lastDailyNotification", 1770323046);
 user_pref("intl.locale.requested", "en-US,da");
 user_pref("media.gmp-gmpopenh264.lastDownload", 1770242927);
 user_pref("media.gmp-gmpopenh264.lastInstallStart", 1770242926);
@@ -152,7 +152,7 @@ user_pref("privacy.bounceTrackingProtection.hasMigratedUserActivationData", true
 user_pref("privacy.clearOnShutdown_v2.formdata", true);
 user_pref("privacy.globalprivacycontrol.was_ever_enabled", true);
 user_pref("privacy.purge_trackers.date_in_cookie_database", "0");
-user_pref("privacy.purge_trackers.last_purge", "1770236674188");
+user_pref("privacy.purge_trackers.last_purge", "1770323046834");
 user_pref("privacy.sanitize.clearOnShutdown.hasMigratedToNewPrefs3", true);
 user_pref("privacy.sanitize.pending", "[{\"id\":\"newtab-container\",\"itemsToClear\":[],\"options\":{}}]");
 user_pref("privacy.trackingprotection.allow_list.hasMigratedCategoryPrefs", true);
