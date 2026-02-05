@@ -163,7 +163,7 @@ user_pref("sanity-test.running", false);
 user_pref("sanity-test.version", "20260129100625");
 user_pref("services.settings.blocklists.addons-bloomfilters.last_check", 1770287603);
 user_pref("services.settings.blocklists.gfx.last_check", 1770287603);
-user_pref("services.settings.clock_skew_seconds", 680);
+user_pref("services.settings.clock_skew_seconds", 1001);
 user_pref("services.settings.last_etag", "\"1770281439659\"");
 user_pref("services.settings.last_update_seconds", 1770289357);
 user_pref("services.settings.main.addons-data-leak-blocker-domains.last_check", 1770287603);
