@@ -164,7 +164,7 @@ user_pref("sanity-test.version", "20260203092256");
 user_pref("security.webauthn.show_ms_settings_link", true);
 user_pref("services.settings.blocklists.addons-bloomfilters.last_check", 1770324027);
 user_pref("services.settings.blocklists.gfx.last_check", 1770324027);
-user_pref("services.settings.clock_skew_seconds", 804);
+user_pref("services.settings.clock_skew_seconds", 2009);
 user_pref("services.settings.last_etag", "\"1770323787848\"");
 user_pref("services.settings.last_update_seconds", 1770324631);
 user_pref("services.settings.main.addons-data-leak-blocker-domains.last_check", 1770324027);
