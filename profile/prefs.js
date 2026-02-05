@@ -257,7 +257,7 @@ user_pref("services.sync.prefs.sync-seen.media.eme.enabled", true);
 user_pref("services.sync.prefs.sync-seen.privacy.clearOnShutdown_v2.formdata", true);
 user_pref("services.sync.prefs.sync-seen.privacy.userContext.enabled", true);
 user_pref("services.sync.prefs.syncID", "muD32dhMf8zx");
-user_pref("services.sync.syncInterval", 600000);
+user_pref("services.sync.syncInterval", 3600000);
 user_pref("services.sync.syncThreshold", 300);
 user_pref("services.sync.username", "gustavbroegger@icloud.com");
 user_pref("sidebar.backupState", "{\"command\":\"viewGenaiChatSidebar\",\"panelOpen\":false,\"launcherExpanded\":false,\"launcherVisible\":false}");
