@@ -242,7 +242,7 @@ user_pref("services.sync.globalScore", 0);
 user_pref("services.sync.lastPing", 1770297992);
 user_pref("services.sync.lastSync", "Fri Feb 06 2026 10:11:13 GMT+0100 (Central European Standard Time)");
 user_pref("services.sync.lastTabFetch", 1770369073);
-user_pref("services.sync.nextSync", 1770372673);
+user_pref("services.sync.nextSync", 0);
 user_pref("services.sync.prefs.lastSync", "1769955922.07");
 user_pref("services.sync.prefs.sync-seen.browser.contentblocking.category", true);
 user_pref("services.sync.prefs.sync-seen.extensions.activeThemeID", true);
