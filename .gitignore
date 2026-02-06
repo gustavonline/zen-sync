@@ -35,3 +35,8 @@ weave/
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Ignore Session and History Files (Handled by Firefox Sync / Prevent Conflicts)
+cookies.sqlite
+places.sqlite
+favicons.sqlite

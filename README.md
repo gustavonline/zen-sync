@@ -73,3 +73,11 @@ zensync config
 ## 🛠 Development
 *   `src/cli.js`: Entry point.
 *   `src/lib/`: Core logic.
+
+### 🔄 Firefox Sync Overlap
+ZenSync ignores the following files to prevent conflicts with **Firefox Sync** and session issues:
+*   `cookies.sqlite` (Session cookies - Prevents being signed out)
+*   `places.sqlite` (History & Bookmarks - Handled by Firefox Sync)
+*   `favicons.sqlite` (Site Icons)
+
+We recommend using **Firefox Sync** for History, Bookmarks, and Open Tabs, and using **ZenSync** for everything else (Extensions, Themes, `userChrome.css`).
