@@ -286,5 +286,5 @@ user_pref("zen.urlbar.suggestions-learner", "{\"zen:global-action-remove-from-es
 user_pref("zen.view.compact.enable-at-startup", false);
 user_pref("zen.view.use-single-toolbar", false);
 user_pref("zen.welcome-screen.seen", true);
-user_pref("zen.workspaces.active", "{da1bc049-bb62-4b51-916d-dc91274a67b3}");
+user_pref("zen.workspaces.active", "{6d45e9da-3aa2-4560-aeea-2b56820a2117}");
 user_pref("zen.workspaces.continue-where-left-off", true);
