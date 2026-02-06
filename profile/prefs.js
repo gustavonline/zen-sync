@@ -19,7 +19,7 @@ user_pref("app.update.background.rolledout", true);
 user_pref("app.update.download.attempts", 0);
 user_pref("app.update.elevate.attempts", 0);
 user_pref("app.update.lastUpdateTime.addon-background-update-timer", 1770313691);
-user_pref("app.update.lastUpdateTime.background-update-timer", 1770314753);
+user_pref("app.update.lastUpdateTime.background-update-timer", 1770336353);
 user_pref("app.update.lastUpdateTime.browser-cleanup-thumbnails", 1770335308);
 user_pref("app.update.lastUpdateTime.glean-addons-daily", 1770313691);
 user_pref("app.update.lastUpdateTime.region-update-timer", 1769947164);
