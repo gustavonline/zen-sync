@@ -77,7 +77,7 @@ user_pref("browser.termsofuse.prefMigrationCheck", true);
 user_pref("browser.theme.toolbar-theme", 0);
 user_pref("browser.toolbars.bookmarks.visibility", "always");
 user_pref("browser.uiCustomization.state", "{\"placements\":{\"widget-overflow-fixed-list\":[],\"unified-extensions-area\":[],\"nav-bar\":[\"back-button\",\"vertical-spacer\",\"forward-button\",\"stop-reload-button\",\"urlbar-container\",\"unified-extensions-button\",\"_testpilot-containers-browser-action\"],\"TabsToolbar\":[\"tabbrowser-tabs\"],\"vertical-tabs\":[],\"PersonalToolbar\":[\"personal-bookmarks\"],\"zen-sidebar-top-buttons\":[\"alltabs-button\",\"customizableui-special-spring6\",\"downloads-button\",\"sync-button\"],\"zen-sidebar-foot-buttons\":[\"developer-button\",\"zen-workspaces-button\",\"zen-create-new-button\"],\"toolbar-menubar\":[\"menubar-items\"]},\"seen\":[\"developer-button\",\"screenshot-button\",\"_testpilot-containers-browser-action\"],\"dirtyAreaCache\":[\"nav-bar\",\"vertical-tabs\",\"zen-sidebar-foot-buttons\",\"PersonalToolbar\",\"zen-sidebar-top-buttons\",\"widget-overflow-fixed-list\",\"TabsToolbar\",\"toolbar-menubar\"],\"currentVersion\":23,\"newElementCount\":16}");
-user_pref("browser.urlbar.lastUrlbarSearchSeconds", 1770388139);
+user_pref("browser.urlbar.lastUrlbarSearchSeconds", 1770404858);
 user_pref("browser.urlbar.placeholderName", "Google");
 user_pref("browser.urlbar.quicksuggest.migrationVersion", 6);
 user_pref("captchadetection.hasUnsubmittedData", false);
@@ -286,5 +286,5 @@ user_pref("zen.urlbar.suggestions-learner", "{\"zen:global-action-remove-from-es
 user_pref("zen.view.compact.enable-at-startup", false);
 user_pref("zen.view.use-single-toolbar", false);
 user_pref("zen.welcome-screen.seen", true);
-user_pref("zen.workspaces.active", "{6d45e9da-3aa2-4560-aeea-2b56820a2117}");
+user_pref("zen.workspaces.active", "{da1bc049-bb62-4b51-916d-dc91274a67b3}");
 user_pref("zen.workspaces.continue-where-left-off", true);
