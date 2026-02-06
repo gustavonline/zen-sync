@@ -74,7 +74,6 @@ user_pref("browser.startup.homepage_override.mstone", "147.0.2");
 user_pref("browser.startup.lastColdStartupCheck", 1770238714);
 user_pref("browser.tabs.inTitlebar", 1);
 user_pref("browser.termsofuse.prefMigrationCheck", true);
-user_pref("browser.theme.toolbar-theme", 0);
 user_pref("browser.toolbars.bookmarks.visibility", "always");
 user_pref("browser.uiCustomization.state", "{\"placements\":{\"widget-overflow-fixed-list\":[],\"unified-extensions-area\":[],\"nav-bar\":[\"back-button\",\"vertical-spacer\",\"forward-button\",\"stop-reload-button\",\"urlbar-container\",\"unified-extensions-button\",\"_testpilot-containers-browser-action\"],\"TabsToolbar\":[\"tabbrowser-tabs\"],\"vertical-tabs\":[],\"PersonalToolbar\":[\"personal-bookmarks\"],\"zen-sidebar-top-buttons\":[\"alltabs-button\",\"customizableui-special-spring6\",\"downloads-button\",\"sync-button\"],\"zen-sidebar-foot-buttons\":[\"developer-button\",\"zen-workspaces-button\",\"zen-create-new-button\"],\"toolbar-menubar\":[\"menubar-items\"]},\"seen\":[\"developer-button\",\"screenshot-button\",\"_testpilot-containers-browser-action\"],\"dirtyAreaCache\":[\"nav-bar\",\"vertical-tabs\",\"zen-sidebar-foot-buttons\",\"PersonalToolbar\",\"zen-sidebar-top-buttons\",\"widget-overflow-fixed-list\",\"TabsToolbar\",\"toolbar-menubar\"],\"currentVersion\":23,\"newElementCount\":16}");
 user_pref("browser.urlbar.lastUrlbarSearchSeconds", 1770299105);
