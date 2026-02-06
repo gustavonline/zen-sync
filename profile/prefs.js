@@ -20,7 +20,7 @@ user_pref("app.update.download.attempts", 0);
 user_pref("app.update.elevate.attempts", 0);
 user_pref("app.update.lastUpdateTime.addon-background-update-timer", 1770313691);
 user_pref("app.update.lastUpdateTime.background-update-timer", 1770336353);
-user_pref("app.update.lastUpdateTime.browser-cleanup-thumbnails", 1770353428);
+user_pref("app.update.lastUpdateTime.browser-cleanup-thumbnails", 1770357028);
 user_pref("app.update.lastUpdateTime.glean-addons-daily", 1770313691);
 user_pref("app.update.lastUpdateTime.region-update-timer", 1769947164);
 user_pref("app.update.lastUpdateTime.rs-experiment-loader-timer", 1770319786);
