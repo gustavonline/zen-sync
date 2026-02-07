@@ -4,7 +4,7 @@
 # Zen Sync - macOS Installer
 # ==========================================
 
-ZEN_SYNC_DIR="$HOME/ZenSync"
+ZEN_SYNC_DIR="$HOME/zen-sync"
 ZEN_PROFILE_PATH="$HOME/Library/Application Support/zen/Profiles"
 PLIST_DEST="$HOME/Library/LaunchAgents/com.gustav.zen-sync.plist"
 

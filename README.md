@@ -18,7 +18,7 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 ### Setup
 1.  Navigate to this folder:
     ```bash
-    cd ~/ZenSync
+    cd ~/zen-sync
     ```
 2.  Install dependencies:
     ```bash

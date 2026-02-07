@@ -3,7 +3,7 @@
 # ==========================================
 
 $ErrorActionPreference = "Stop"
-$ZenSyncDir = "$HOME\ZenSync"
+$ZenSyncDir = "$HOME\zen-sync"
 $ZenProfilePath = "$env:APPDATA\Zen\Profiles"
 $StartupFolder = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
 $ShortcutPath = "$StartupFolder\ZenSync.lnk"

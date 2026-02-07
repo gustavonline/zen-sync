@@ -2,7 +2,7 @@
 # Zen Sync Watcher (Windows) - v2.0
 # ==========================================
 
-$RepoDir = "$HOME\ZenSync"
+$RepoDir = "$HOME\zen-sync"
 $LogFile = "$RepoDir\zen-sync.log"
 $MaxLogSize = 500KB
 $PollInterval = 5 # Check every 5 seconds

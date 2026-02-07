@@ -4,7 +4,7 @@
 # Zen Sync Watcher (macOS) - v2.0
 # ==========================================
 
-REPO_DIR="$HOME/ZenSync"
+REPO_DIR="$HOME/zen-sync"
 LOG_FILE="/tmp/zen-sync.log"
 MAX_LOG_SIZE=524288 # 512KB
 POLL_INTERVAL=5    # Check every 5 seconds
