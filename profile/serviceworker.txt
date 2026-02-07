@@ -952,23 +952,6 @@ true
 0
 #
 
-https://www.youtube.com/
-https://www.youtube.com/sw.js
-true
-{7552b031-c2f9-4fd7-a8b3-901bc0bf4aeb}
-0
-1770388474502760
-1770388474735342
-1770309961406184
-1
-true
-0
-2108
-0
--1
-0
-#
-
 https://ww2.proshop.dk/_/service_worker
 https://ww2.proshop.dk/_/service_worker/61k0/sw.js?origin=https%3A%2F%2Fwww.proshop.dk
 false
