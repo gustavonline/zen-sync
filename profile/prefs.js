@@ -247,7 +247,7 @@ user_pref("services.sync.engine.prefs.modified", false);
 user_pref("services.sync.engine.workspaces", true);
 user_pref("services.sync.forms.lastSync", "0");
 user_pref("services.sync.forms.syncID", "gXsCOhObik_8");
-user_pref("services.sync.globalScore", 8);
+user_pref("services.sync.globalScore", 12);
 user_pref("services.sync.lastPing", 1770488647);
 user_pref("services.sync.lastSync", "Sun Feb 08 2026 14:25:07 GMT+0100 (Central European Standard Time)");
 user_pref("services.sync.lastSyncReassigned", true);
@@ -289,5 +289,5 @@ user_pref("zen.urlbar.suggestions-learner", "{\"zen:global-action-remove-from-es
 user_pref("zen.view.compact.enable-at-startup", false);
 user_pref("zen.view.use-single-toolbar", false);
 user_pref("zen.welcome-screen.seen", true);
-user_pref("zen.workspaces.active", "{5ba09051-99a7-43e0-b598-7b3a24a72293}");
+user_pref("zen.workspaces.active", "{6d45e9da-3aa2-4560-aeea-2b56820a2117}");
 user_pref("zen.workspaces.continue-where-left-off", true);
