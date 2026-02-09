@@ -8,6 +8,7 @@ Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using
 *   **Smart Sync:** Automatically handles file locks and ignores caches.
 *   **Auto Sync:** Continuous background sync (configurable).
 *   **Auto Start:** Native startup integration (LaunchAgent / Startup Shortcut).
+*   **Friendly Notifications:** Cute & helpful alerts keep you in the loop! 🧘✨
 
 ## 🚀 Installation
 

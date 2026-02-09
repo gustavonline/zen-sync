@@ -28,21 +28,46 @@ async function performSync(repoPath, message, notify = true) {
                 await gitPull(repoPath);
                 
                 const pushed = await gitPush(repoPath);
-                if (pushed) {
+            if (pushed) {
                     log('✅ Synced to cloud.', 'success');
-                    if (notify) notifier.notify({ title: 'ZenSync', message: 'Profile synced!' });
+                    if (notify) notifier.notify({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
                     updateLastSync(Date.now());
                     return true;
                 } else {
                     log('❌ Push failed.', 'error');
-                    if (notify) notifier.notify({ title: 'ZenSync', message: 'Sync failed.' });
+                    // Always notify on error, unless explicitly disabled by config (not implemented here)
+                    notifier.notify({ 
+                        title: 'ZenSync', 
+                        message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
+                        wait: true 
+                    });
                 }
+            } else {
+                 log('❌ Commit failed.', 'error');
+                 notifier.notify({ 
+                    title: 'ZenSync', 
+                    message: 'Hiccup! 🐸\nCommit failed. Check logs.',
+                    wait: true
+                });
             }
         } else {
             log('No changes found.', 'info');
         }
     } catch (error) {
         log(`Sync warning: ${error.message}`, 'warning');
+        
+        let msg = 'Hiccup! 🐸\nCheck \'zensync logs\' for details.';
+        if (error.message.includes('index.lock')) {
+            msg = 'Uh-oh, a little tangle! 🧶\nRun: rm .git/index.lock';
+        } else if (error.message.includes('network') || error.message.includes('resolve host')) {
+            msg = 'Cloud seems a bit foggy? ☁️\nCheck internet & try again.';
+        }
+
+        notifier.notify({ 
+            title: 'ZenSync', 
+            message: msg,
+            wait: true
+        });
     }
     return false;
 }
