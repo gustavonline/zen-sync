@@ -1,42 +1,21 @@
-# Ignore Caches and Temporary Files
-cache/
-caches/
-startupCache/
-thumbnails/
-*.tmp
-*.bak
-*.log
-
-# Ignore Lock Files (Critical for preventing sync issues)
-lock
-.parentlock
-parent.lock
-
-# Ignore Storage/Site Data (Too large/variable for Git)
-storage/
-safebrowsing/
-datareporting/
-saved-telemetry-pings/
-crashes/
-minidumps/
-shader-cache/
-
-# Ignore Sqlite Temporary Files
-*.sqlite-wal
-*.sqlite-shm
-
-# Ignore Window State
-xulstore.json
-
-# Sync Logs
-weave/
+# Node modules
+node_modules/
 
 # OS Specific
 .DS_Store
 Thumbs.db
-node_modules/
 
-# Ignore Session and History Files (Handled by Firefox Sync / Prevent Conflicts)
-cookies.sqlite
-places.sqlite
-favicons.sqlite
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Profile Data (if accidentally present)
+profile/
+
+# Build artifacts (if any)
+dist/
+build/
+
+# Config files
+.env
