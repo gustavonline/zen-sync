@@ -1,6 +1,6 @@
 {
   "name": "zensync",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub.",
   "main": "index.js",
   "scripts": {
