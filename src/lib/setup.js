@@ -307,12 +307,15 @@ async function handleInitialization() {
 
         console.log(chalk.blue(`\nCloning ${repoUrl}...`));
         try {
-            await execa('git', ['clone', repoUrl, '.']);
+            // Clone into current directory (.)
+            // We use 'inherit' for stdio to let the user see git progress/errors directly
+            await execa('git', ['clone', repoUrl, '.'], { stdio: 'inherit' });
             console.log(chalk.green('✅ Repository cloned successfully!'));
             return true;
         } catch (error) {
-            console.error(chalk.red('Failed to clone repository:'), error.message);
-            console.log(chalk.yellow('Make sure the directory is empty or the URL is correct.'));
+            console.error(chalk.red('Failed to clone repository.'));
+            console.log(chalk.yellow('Make sure the directory is empty and you have access to the repo.'));
+            console.log(chalk.gray(error.message));
             process.exit(1);
         }
     } else if (action === 'create') {
@@ -468,11 +471,14 @@ export async function setup(options = {}) {
         const defaultPath = path.join(os.homedir(), 'zensync-data');
         const cwd = process.cwd();
         
-        // If we are already in a seemingly valid (or explicitly chosen) repo, use it
+        // Check if we are in an existing profile repo
+        // We look for 'profile' folder AND .git to be sure it's a profile repo, not just any git repo
         const isRepo = fs.existsSync(path.join(cwd, '.git'));
+        const hasProfile = fs.existsSync(path.join(cwd, 'profile'));
+        const isSourceRepo = fs.existsSync(path.join(cwd, 'src', 'cli.js')); // Avoid detecting self
         
-        if (isRepo) {
-             console.log(chalk.gray(`Detected existing repository in: ${cwd}`));
+        if (isRepo && hasProfile && !isSourceRepo) {
+             console.log(chalk.gray(`Detected existing profile repository in: ${cwd}`));
              const { useCwd } = await inquirer.prompt([{
                  type: 'confirm',
                  name: 'useCwd',
