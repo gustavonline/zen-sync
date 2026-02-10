@@ -115,13 +115,9 @@ export async function enableStartup() {
 
     } else if (process.platform === 'win32') {
         // 1. Create a persistent VBS script that launches Node hidden
-        // We place it in the 'scripts' folder relative to the repo root
-        // targetScript is .../src/cli.js, so we go up one level
-        const scriptsDir = path.join(path.dirname(targetScript), '..', '..', 'scripts');
-        // Note: targetScript is src/cli.js. dirname is src. .. is root. scripts is root/scripts. 
-        // Wait, path.dirname('src/cli.js') -> 'src'. path.join('src', '..', 'scripts') -> 'scripts'. 
-        // But targetScript is absolute path. 
-        // Let's rely on path resolution.
+        // We place it in the 'scripts' folder at the repo root
+        // targetScript is .../src/cli.js → dirname is .../src → .. is repo root
+        const scriptsDir = path.join(path.dirname(targetScript), '..', 'scripts');
         
         if (!fs.existsSync(scriptsDir)) {
             fs.mkdirSync(scriptsDir, { recursive: true });

@@ -86,7 +86,7 @@ export async function watch() {
     // Set initial state
     setProcessState(process.pid, 'running');
 
-    // Handle exit
+    // Handle exit — clean up state on any termination
     process.on('SIGTERM', () => {
         log('Watcher stopping (SIGTERM)...');
         clearProcessState();
@@ -96,6 +96,10 @@ export async function watch() {
         log('Watcher stopping (SIGINT)...');
         clearProcessState();
         process.exit(0);
+    });
+    // Safety net: on Windows, SIGTERM doesn't fire — ensure state is always cleaned
+    process.on('exit', () => {
+        clearProcessState();
     });
 
     // Initial pull

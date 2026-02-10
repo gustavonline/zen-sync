@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { execSync } from 'child_process';
 import process from 'process';
 import { getProcessState, setProcessState, clearProcessState } from './state.js';
 import chalk from 'chalk';
@@ -37,7 +38,18 @@ export function stopDaemon() {
     }
 
     try {
-        process.kill(pid, 'SIGTERM');
+        if (process.platform === 'win32') {
+            // On Windows, SIGTERM is not a real signal — it force-kills without
+            // triggering handlers. Use taskkill for a cleaner stop attempt.
+            try {
+                execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' });
+            } catch {
+                // Process may already be gone
+                process.kill(pid, 'SIGTERM');
+            }
+        } else {
+            process.kill(pid, 'SIGTERM');
+        }
         clearProcessState();
         console.log(chalk.green('Stopped ZenSync watcher.'));
     } catch (e) {
