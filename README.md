@@ -3,9 +3,10 @@
 Seamlessly sync your Zen Browser profile between macOS and Windows using GitHub.
 
 ## Features
-- Syncs your Zen Browser profile across devices.
-- Works on macOS and Windows.
-- Uses a separate Git repository for your profile data.
+- **Cross-Platform:** Syncs your profile between macOS and Windows.
+- **Separate Data:** Keeps your sensitive profile data in a private repository, separate from the CLI tool.
+- **Easy Setup:** Interactive wizard to clone an existing profile or create a new one from your current browser data.
+- **Automatic Sync:** Runs in the background to keep devices in sync.
 
 ## Installation
 
@@ -13,12 +14,25 @@ Seamlessly sync your Zen Browser profile between macOS and Windows using GitHub.
 npm install -g zensync
 ```
 
-## Usage
+## Quick Start
 
-1.  Create a directory for your profile data (or clone your existing profile repo).
-2.  Navigate to that directory.
-3.  Run `zensync setup`. This will configure the current directory as your profile repository and link your Zen Browser profile to it.
-4.  Run `zensync watch` to start syncing changes automatically.
+1.  Create a new folder where you want to store your profile data:
+    ```bash
+    mkdir my-zen-profile
+    cd my-zen-profile
+    ```
+2.  Run the setup wizard:
+    ```bash
+    zensync setup
+    ```
+3.  Choose one of the options:
+    - **Clone existing repository:** If you already have a ZenSync repo on another machine.
+    - **Create new repository:** If this is your first time setting up ZenSync. It will import your current browser data and create a private GitHub repo for you.
+
+4.  Start syncing:
+    ```bash
+    zensync watch
+    ```
 
 ## Development
 
