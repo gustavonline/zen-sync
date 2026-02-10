@@ -263,7 +263,7 @@ user_pref("storage.vacuum.last.content-prefs.sqlite", 1770111688);
 user_pref("storage.vacuum.last.index", 2);
 user_pref("storage.vacuum.last.places.sqlite", 1769959062);
 user_pref("toolkit.profiles.storeID", "91645d73");
-user_pref("toolkit.startup.last_success", 1770724092);
+user_pref("toolkit.startup.last_success", 1770724976);
 user_pref("toolkit.telemetry.cachedClientID", "101af924-f628-442e-b41c-43cf92237a8d");
 user_pref("toolkit.telemetry.cachedProfileGroupID", "94cf57d1-1486-4654-8fb6-8ac8c7529995");
 user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
