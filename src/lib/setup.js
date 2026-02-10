@@ -257,31 +257,51 @@ async function handleInitialization() {
     const isGit = fs.existsSync(path.join(cwd, '.git'));
     const hasProfile = fs.existsSync(path.join(cwd, 'profile'));
 
-    // If it looks like a valid repo, assume we are good to go
+    // If it looks like a valid repo (even if empty), we might just be setting up
     if (isGit && hasProfile) {
         return true; 
     }
 
-    console.log(chalk.bold('Welcome to ZenSync! 🚀'));
-    console.log(chalk.white('It looks like this directory is not set up yet.'));
-    console.log(chalk.gray(`Current directory: ${cwd}\n`));
+    // Check if directory is empty (safe to clone into)
+    const files = fs.readdirSync(cwd).filter(f => f !== '.DS_Store' && f !== 'Thumbs.db');
+    const isEmpty = files.length === 0;
 
-    const { action } = await inquirer.prompt([{
-        type: 'list',
-        name: 'action',
-        message: 'What would you like to do?',
-        choices: [
-            { name: '📥  Clone an existing ZenSync repository (New Machine)', value: 'clone' },
-            { name: '✨  Create a new ZenSync repository here (First Time Setup)', value: 'create' },
-            { name: '🔧  Use current directory as-is (Advanced)', value: 'current' }
-        ]
-    }]);
+    console.log(chalk.white('\nInitializing repository...'));
+
+    let action;
+    
+    if (!isEmpty) {
+        // If directory is not empty and not a repo, warn/ask
+        console.log(chalk.yellow(`Directory is not empty: ${cwd}`));
+        const { choice } = await inquirer.prompt([{
+            type: 'list',
+            name: 'choice',
+            message: 'How do you want to proceed?',
+            choices: [
+                { name: '✨  Create a new ZenSync repository here', value: 'create' },
+                { name: '🔧  Use current directory as-is (I know what I\'m doing)', value: 'current' }
+            ]
+        }]);
+        action = choice;
+    } else {
+        // Directory is empty -> Offer Clone or Create
+        const { choice } = await inquirer.prompt([{
+            type: 'list',
+            name: 'choice',
+            message: 'Do you have an existing ZenSync repository?',
+            choices: [
+                { name: 'Yes, I have a Git URL (Clone existing)', value: 'clone' },
+                { name: 'No, create a new one (Import local profile)', value: 'create' }
+            ]
+        }]);
+        action = choice;
+    }
 
     if (action === 'clone') {
         const { repoUrl } = await inquirer.prompt([{
             type: 'input',
             name: 'repoUrl',
-            message: 'Enter the Git URL to clone (e.g. https://github.com/user/zen-profile.git):',
+            message: 'Enter the Git URL:',
             validate: input => input.length > 5 ? true : 'Please enter a valid URL'
         }]);
 
@@ -374,14 +394,12 @@ favicons.sqlite
                 const { importProfile } = await inquirer.prompt([{
                     type: 'confirm',
                     name: 'importProfile',
-                    message: 'Do you want to import your current browser data into this repo?',
+                    message: 'Import your current browser data into this repo?',
                     default: true
                 }]);
 
                 if (importProfile) {
                     console.log(chalk.blue('Importing profile data... (This might take a moment)'));
-                    // Use cp -R logic (execa might be safer for cross-platform recursive copy if 'cp' isn't available, 
-                    // but we can use fs.cpSync in Node 16.7+)
                      try {
                         fs.cpSync(localProfile, profilePath, { recursive: true, force: true, dereference: true });
                         console.log(chalk.green('✅ Profile data imported!'));
@@ -402,7 +420,7 @@ favicons.sqlite
             const { setupGithub } = await inquirer.prompt([{
                 type: 'confirm',
                 name: 'setupGithub',
-                message: 'Do you want to create a private GitHub repository for this now?',
+                message: 'Create a private GitHub repository for this now?',
                 default: true
             }]);
 
@@ -442,25 +460,69 @@ favicons.sqlite
 export async function setup(options = {}) {
     console.log(chalk.bold.blue('ZenSync Setup Wizard'));
 
-    let repoPath = process.cwd();
-
+    let repoPath;
+    
     if (options.yes) {
-        config.set('repoPath', repoPath);
-        console.log(chalk.green('✅ Configuration saved (Non-interactive mode)!'));
+        repoPath = process.cwd();
     } else {
-        // Run Phase 2: Initialization checks
-        const ready = await handleInitialization();
-        if (!ready) {
-            console.log(chalk.red('Setup aborted.'));
-            return;
+        const defaultPath = path.join(os.homedir(), 'zensync-data');
+        const cwd = process.cwd();
+        
+        // If we are already in a seemingly valid (or explicitly chosen) repo, use it
+        const isRepo = fs.existsSync(path.join(cwd, '.git'));
+        
+        if (isRepo) {
+             console.log(chalk.gray(`Detected existing repository in: ${cwd}`));
+             const { useCwd } = await inquirer.prompt([{
+                 type: 'confirm',
+                 name: 'useCwd',
+                 message: 'Use current directory?',
+                 default: true
+             }]);
+             if (useCwd) {
+                 repoPath = cwd;
+             }
         }
 
-        config.set('repoPath', repoPath);
-        console.log(chalk.green('✅ Configuration saved!'));
-        
-        // Run Phase 3: Profile Linking
-        await linkProfile(repoPath);
+        if (!repoPath) {
+            const { installDir } = await inquirer.prompt([{
+                type: 'input',
+                name: 'installDir',
+                message: 'Where should we store your profile data?',
+                default: defaultPath
+            }]);
+            
+            // Handle ~ expansion manually since node doesn't do it
+            if (installDir.startsWith('~/') || installDir === '~') {
+                repoPath = path.join(os.homedir(), installDir.slice(1));
+            } else {
+                repoPath = path.resolve(installDir);
+            }
+        }
     }
+
+    // Ensure directory exists
+    if (!fs.existsSync(repoPath)) {
+        console.log(chalk.blue(`Creating directory: ${repoPath}`));
+        fs.mkdirSync(repoPath, { recursive: true });
+    }
+
+    // Change to that directory for git operations
+    process.chdir(repoPath);
+
+    // Save config immediately so we know where to look
+    config.set('repoPath', repoPath);
+    console.log(chalk.green('✅ Configuration saved!'));
+
+    // Run Phase 2: Initialization checks
+    const ready = await handleInitialization();
+    if (!ready) {
+        console.log(chalk.red('Setup aborted.'));
+        return;
+    }
+
+    // Run Phase 3: Profile Linking
+    await linkProfile(repoPath);
 
     console.log(chalk.white('\nYou can now run:'), chalk.cyan('zensync watch'));
 }
