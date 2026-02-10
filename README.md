@@ -16,20 +16,17 @@ npm install -g zensync
 
 ## Quick Start
 
-1.  Create a new folder where you want to store your profile data:
+1.  **Install & Setup:**
     ```bash
-    mkdir my-zen-profile
-    cd my-zen-profile
-    ```
-2.  Run the setup wizard:
-    ```bash
+    npm install -g zensync
     zensync setup
     ```
-3.  Choose one of the options:
-    - **Clone existing repository:** If you already have a ZenSync repo on another machine.
-    - **Create new repository:** If this is your first time setting up ZenSync. It will import your current browser data and create a private GitHub repo for you.
+2.  **Follow the Wizard:**
+    - The wizard will ask where to store your profile data (e.g., `~/zensync-data`).
+    - If you are on a **new machine**, choose **"Clone existing repository"** and provide your GitHub URL.
+    - If this is your **first time**, choose **"Create a new repository"**. It will import your browser data and create a private GitHub repo for you.
 
-4.  Start syncing:
+3.  **Start Syncing:**
     ```bash
     zensync watch
     ```
