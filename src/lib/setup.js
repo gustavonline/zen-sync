@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execa } from 'execa';
 import config from './config.js';
 
 function getProfilesDir() {
@@ -60,6 +61,9 @@ function createJunction(targetPath, repoProfilePath) {
     fs.symlinkSync(repoProfilePath, targetPath, type);
 }
 
+/**
+ * Phase 3: Link the repo profile to the Zen Browser profile folder
+ */
 async function linkProfile(repoPath) {
     const platform = process.platform;
     const profilesDir = getProfilesDir();
@@ -76,6 +80,27 @@ async function linkProfile(repoPath) {
     }
 
     const repoProfilePath = path.join(repoPath, 'profile');
+    
+    // SAFETY CHECK: Ensure repo profile is not empty before linking
+    if (!fs.existsSync(repoProfilePath) || fs.readdirSync(repoProfilePath).length === 0) {
+        console.log(chalk.red('\n⚠️  Critical Safety Warning ⚠️'));
+        console.log(chalk.white('The repository profile folder is EMPTY.'));
+        console.log(chalk.white('Linking this would wipe your browser profile if not backed up correctly.'));
+        console.log(chalk.white('This typically happens if you just initialized a repo but didn\'t import your data.'));
+        
+        const { forceLink } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'forceLink',
+            message: 'Do you really want to link an EMPTY profile? (Not recommended)',
+            default: false
+        }]);
+        
+        if (!forceLink) {
+            console.log(chalk.yellow('Aborting setup to protect your data.'));
+            return;
+        }
+    }
+
     const items = fs.readdirSync(profilesDir, { withFileTypes: true });
 
     // --- Case 1: Already linked (junction/symlink exists and points to our profile) ---
@@ -204,6 +229,216 @@ async function linkProfile(repoPath) {
     console.log(chalk.gray('Make sure you have opened Zen Browser at least once.'));
 }
 
+/**
+ * Helper: Find local Zen profile to import
+ */
+function findLocalZenProfile() {
+    const profilesDir = getProfilesDir();
+    if (!profilesDir || !fs.existsSync(profilesDir)) return null;
+
+    const items = fs.readdirSync(profilesDir, { withFileTypes: true });
+    // Look for default release profile
+    const targetProfile = items.find(item => {
+        return item.isDirectory() && !item.isSymbolicLink() &&
+            (item.name.endsWith('Default (release)') || item.name.endsWith('.default-release'));
+    });
+    
+    if (targetProfile) {
+        return path.join(profilesDir, targetProfile.name);
+    }
+    return null;
+}
+
+/**
+ * Phase 2: Handle initialization (New Repo, Clone, or Existing)
+ */
+async function handleInitialization() {
+    const cwd = process.cwd();
+    const isGit = fs.existsSync(path.join(cwd, '.git'));
+    const hasProfile = fs.existsSync(path.join(cwd, 'profile'));
+
+    // If it looks like a valid repo, assume we are good to go
+    if (isGit && hasProfile) {
+        return true; 
+    }
+
+    console.log(chalk.bold('Welcome to ZenSync! 🚀'));
+    console.log(chalk.white('It looks like this directory is not set up yet.'));
+    console.log(chalk.gray(`Current directory: ${cwd}\n`));
+
+    const { action } = await inquirer.prompt([{
+        type: 'list',
+        name: 'action',
+        message: 'What would you like to do?',
+        choices: [
+            { name: '📥  Clone an existing ZenSync repository (New Machine)', value: 'clone' },
+            { name: '✨  Create a new ZenSync repository here (First Time Setup)', value: 'create' },
+            { name: '🔧  Use current directory as-is (Advanced)', value: 'current' }
+        ]
+    }]);
+
+    if (action === 'clone') {
+        const { repoUrl } = await inquirer.prompt([{
+            type: 'input',
+            name: 'repoUrl',
+            message: 'Enter the Git URL to clone (e.g. https://github.com/user/zen-profile.git):',
+            validate: input => input.length > 5 ? true : 'Please enter a valid URL'
+        }]);
+
+        console.log(chalk.blue(`\nCloning ${repoUrl}...`));
+        try {
+            await execa('git', ['clone', repoUrl, '.']);
+            console.log(chalk.green('✅ Repository cloned successfully!'));
+            return true;
+        } catch (error) {
+            console.error(chalk.red('Failed to clone repository:'), error.message);
+            console.log(chalk.yellow('Make sure the directory is empty or the URL is correct.'));
+            process.exit(1);
+        }
+    } else if (action === 'create') {
+        console.log(chalk.blue('\nInitializing new ZenSync repository...'));
+        
+        try {
+            // 1. Git Init
+            await execa('git', ['init']);
+            
+            // 2. Create structure
+            const profilePath = path.join(cwd, 'profile');
+            if (!fs.existsSync(profilePath)) fs.mkdirSync(profilePath);
+
+            // 3. Create .gitignore
+            const gitignoreContent = `# Ignore Caches and Temporary Files
+cache/
+caches/
+startupCache/
+thumbnails/
+*.tmp
+*.bak
+*.log
+
+# Ignore Lock Files
+lock
+.parentlock
+parent.lock
+
+# Ignore Storage/Site Data (Too large/variable for Git)
+storage/
+safebrowsing/
+datareporting/
+saved-telemetry-pings/
+crashes/
+minidumps/
+shader-cache/
+
+# Ignore Sqlite Temporary Files
+*.sqlite-wal
+*.sqlite-shm
+
+# Ignore Window State
+xulstore.json
+
+# Sync Logs
+weave/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+node_modules/
+
+# Ignore Session and History Files
+cookies.sqlite
+places.sqlite
+favicons.sqlite
+`;
+            fs.writeFileSync(path.join(cwd, '.gitignore'), gitignoreContent);
+            
+            // 4. Create package.json
+            const packageJson = {
+                name: "my-zen-profile",
+                version: "1.0.0",
+                description: "My Zen Browser Profile managed by ZenSync",
+                scripts: {
+                    "setup": "zensync setup",
+                    "sync": "zensync watch",
+                    "backup": "zensync backup",
+                    "restore": "zensync restore"
+                },
+                dependencies: {}
+            };
+            fs.writeFileSync(path.join(cwd, 'package.json'), JSON.stringify(packageJson, null, 2));
+
+            // 5. Import Profile Data
+            const localProfile = findLocalZenProfile();
+            if (localProfile) {
+                console.log(chalk.white(`Found local Zen profile at: ${localProfile}`));
+                const { importProfile } = await inquirer.prompt([{
+                    type: 'confirm',
+                    name: 'importProfile',
+                    message: 'Do you want to import your current browser data into this repo?',
+                    default: true
+                }]);
+
+                if (importProfile) {
+                    console.log(chalk.blue('Importing profile data... (This might take a moment)'));
+                    // Use cp -R logic (execa might be safer for cross-platform recursive copy if 'cp' isn't available, 
+                    // but we can use fs.cpSync in Node 16.7+)
+                     try {
+                        fs.cpSync(localProfile, profilePath, { recursive: true, force: true, dereference: true });
+                        console.log(chalk.green('✅ Profile data imported!'));
+                     } catch (err) {
+                        console.error(chalk.red('Failed to copy profile data:'), err.message);
+                     }
+                }
+            } else {
+                console.log(chalk.yellow('No local Zen profile found to import. You will start with an empty profile.'));
+            }
+            
+            // 6. Initial Commit
+            await execa('git', ['add', '.']);
+            await execa('git', ['commit', '-m', 'Initial profile setup via ZenSync']);
+            console.log(chalk.green('✅ Local repository initialized!'));
+
+            // 7. GitHub Setup
+            const { setupGithub } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'setupGithub',
+                message: 'Do you want to create a private GitHub repository for this now?',
+                default: true
+            }]);
+
+            if (setupGithub) {
+                try {
+                    await execa('gh', ['--version']); // Check if gh is installed
+                    console.log(chalk.blue('Creating private repository on GitHub...'));
+                    const repoName = 'zen-profile-data-' + Date.now().toString().slice(-4);
+                    
+                    const { confirmName } = await inquirer.prompt([{
+                        type: 'input',
+                        name: 'confirmName',
+                        message: 'Repository name:',
+                        default: 'zen-profile-data'
+                    }]);
+
+                    // Create repo
+                    await execa('gh', ['repo', 'create', confirmName, '--private', '--source=.', '--remote=origin', '--push']);
+                    console.log(chalk.green(`✅ Repository created: https://github.com/${(await execa('gh', ['api', 'user', '--jq', '.login'])).stdout}/${confirmName}`));
+                } catch (e) {
+                    console.error(chalk.red('GitHub CLI (gh) not found or failed.'));
+                    console.log(chalk.white('You can manually push this repo later using standard git commands.'));
+                }
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error(chalk.red('Failed to initialize repository:'), error.message);
+            return false;
+        }
+    }
+
+    return true; // Proceed for 'current'
+}
+
 export async function setup(options = {}) {
     console.log(chalk.bold.blue('ZenSync Setup Wizard'));
 
@@ -212,26 +447,18 @@ export async function setup(options = {}) {
     if (options.yes) {
         config.set('repoPath', repoPath);
         console.log(chalk.green('✅ Configuration saved (Non-interactive mode)!'));
-        // We skip profile linking in non-interactive mode for safety
     } else {
-        const answers = await inquirer.prompt([
-            {
-                type: 'confirm',
-                name: 'isCorrectDir',
-                message: `Is this your ZenSync repository?\n  ${repoPath}`,
-                default: true
-            }
-        ]);
-
-        if (!answers.isCorrectDir) {
-            console.log(chalk.red('Please navigate to your ZenSync directory and run setup again.'));
-            process.exit(0);
+        // Run Phase 2: Initialization checks
+        const ready = await handleInitialization();
+        if (!ready) {
+            console.log(chalk.red('Setup aborted.'));
+            return;
         }
 
         config.set('repoPath', repoPath);
         console.log(chalk.green('✅ Configuration saved!'));
         
-        // Run profile linking logic
+        // Run Phase 3: Profile Linking
         await linkProfile(repoPath);
     }
 
