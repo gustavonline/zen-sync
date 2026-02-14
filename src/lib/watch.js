@@ -1,12 +1,22 @@
 import psList from 'ps-list';
 import notifier from 'node-notifier';
 import config from './config.js';
-import { gitAdd, gitCommit, gitPush, gitPull, hasChanges } from './git.js';
+import {
+    gitAdd,
+    gitCommit,
+    gitPush,
+    gitPull,
+    hasChanges,
+    getCurrentBranch,
+    isRebaseInProgress,
+    gitAbortRebase
+} from './git.js';
 import { log } from './logger.js';
 import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 let wasRunning = false;
 let lastSyncTime = Date.now();
+let repoIssueActive = false;
 
 async function checkZen() {
     const list = await psList();
@@ -18,44 +28,111 @@ async function checkZen() {
     return !!isRunning;
 }
 
+async function ensureRepoReady(repoPath, notify = false) {
+    const branch = await getCurrentBranch(repoPath);
+    if (branch) {
+        repoIssueActive = false;
+        return true;
+    }
+
+    const shouldAnnounce = !repoIssueActive;
+
+    if (await isRebaseInProgress(repoPath)) {
+        if (shouldAnnounce) {
+            log('⚠️ Detected interrupted git rebase. Attempting auto-recovery...', 'warning');
+        }
+
+        const aborted = await gitAbortRebase(repoPath);
+        if (aborted.success) {
+            if (shouldAnnounce) {
+                log('✅ Rebase aborted safely. Sync will retry on next cycle.', 'warning');
+            }
+        } else if (shouldAnnounce) {
+            log(`❌ Failed to abort rebase: ${aborted.error}`, 'error');
+        }
+
+        if (notify && shouldAnnounce) {
+            notifier.notify({
+                title: 'ZenSync',
+                message: 'Git rebase got stuck. ZenSync attempted auto-recovery. Check logs.',
+                wait: true
+            });
+        }
+
+        repoIssueActive = true;
+        return false;
+    }
+
+    if (shouldAnnounce) {
+        log('❌ Git is in detached HEAD state. Run: git checkout <your-main-branch>', 'error');
+    }
+
+    if (notify && shouldAnnounce) {
+        notifier.notify({
+            title: 'ZenSync',
+            message: 'Git is in detached HEAD state. Check logs for recovery steps.',
+            wait: true
+        });
+    }
+
+    repoIssueActive = true;
+    return false;
+}
+
 async function performSync(repoPath, message, notify = true) {
     try {
+        if (!(await ensureRepoReady(repoPath, notify))) {
+            return false;
+        }
+
         await gitAdd(repoPath);
         if (await hasChanges(repoPath)) {
-            const committed = await gitCommit(repoPath, message);
-            if (committed) {
+            const commitResult = await gitCommit(repoPath, message);
+            if (commitResult.success) {
                 // Pull remote changes to avoid conflicts if device was asleep/offline
-                await gitPull(repoPath);
-                
-                const pushed = await gitPush(repoPath);
-            if (pushed) {
+                const pullResult = await gitPull(repoPath);
+                if (!pullResult.success) {
+                    log(`❌ Pull failed: ${pullResult.error}`, 'error');
+                    await ensureRepoReady(repoPath, false);
+                    if (notify) {
+                        notifier.notify({
+                            title: 'ZenSync',
+                            message: 'Could not pull latest cloud changes. Check logs.',
+                            wait: true
+                        });
+                    }
+                    return false;
+                }
+
+                const pushResult = await gitPush(repoPath);
+                if (pushResult.success) {
                     log('✅ Synced to cloud.', 'success');
                     if (notify) notifier.notify({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
                     updateLastSync(Date.now());
                     return true;
-                } else {
-                    log('❌ Push failed.', 'error');
-                    // Always notify on error, unless explicitly disabled by config (not implemented here)
-                    notifier.notify({ 
-                        title: 'ZenSync', 
-                        message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
-                        wait: true 
-                    });
                 }
+
+                log(`❌ Push failed: ${pushResult.error}`, 'error');
+                notifier.notify({
+                    title: 'ZenSync',
+                    message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
+                    wait: true
+                });
             } else {
-                 log('❌ Commit failed.', 'error');
-                 notifier.notify({ 
-                    title: 'ZenSync', 
+                log(`❌ Commit failed: ${commitResult.error}`, 'error');
+                notifier.notify({
+                    title: 'ZenSync',
                     message: 'Hiccup! 🐸\nCommit failed. Check logs.',
                     wait: true
                 });
             }
         } else {
             log('No changes found.', 'info');
+            return true;
         }
     } catch (error) {
         log(`Sync warning: ${error.message}`, 'warning');
-        
+
         let msg = 'Hiccup! 🐸\nCheck \'zensync logs\' for details.';
         if (error.message.includes('index.lock')) {
             msg = 'Uh-oh, a little tangle! 🧶\nRun: rm .git/index.lock';
@@ -63,8 +140,8 @@ async function performSync(repoPath, message, notify = true) {
             msg = 'Cloud seems a bit foggy? ☁️\nCheck internet & try again.';
         }
 
-        notifier.notify({ 
-            title: 'ZenSync', 
+        notifier.notify({
+            title: 'ZenSync',
             message: msg,
             wait: true
         });
@@ -103,11 +180,20 @@ export async function watch() {
     });
 
     // Initial pull
-    await gitPull(repoPath);
+    const initialPull = await gitPull(repoPath);
+    if (!initialPull.success) {
+        log(`⚠️ Initial pull failed: ${initialPull.error}`, 'warning');
+        await ensureRepoReady(repoPath, false);
+    }
 
     while (true) {
         // Update heartbeat
         setProcessState(process.pid, 'running');
+
+        if (!(await ensureRepoReady(repoPath, false))) {
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+        }
 
         const isRunning = await checkZen();
 
@@ -121,7 +207,7 @@ export async function watch() {
             if (autoSyncInterval > 0) {
                 const now = Date.now();
                 const diffMinutes = (now - lastSyncTime) / 1000 / 60;
-                
+
                 if (diffMinutes >= autoSyncInterval) {
                     log(`⏳ Running Auto-Sync (${autoSyncInterval}m interval)...`);
                     await performSync(repoPath, `Auto-Sync (Live): ${new Date().toLocaleString()}`, false);
@@ -134,14 +220,17 @@ export async function watch() {
                 log('Zen Browser CLOSED. Syncing...');
                 // Wait for locks
                 await new Promise(r => setTimeout(r, 2000));
-                
+
                 await performSync(repoPath, `Auto-Sync: ${new Date().toLocaleString()}`, true);
                 wasRunning = false;
                 lastSyncTime = Date.now();
             }
 
             // Idle pull
-            await gitPull(repoPath);
+            const idlePull = await gitPull(repoPath);
+            if (!idlePull.success && idlePull.error.includes('rebase')) {
+                await ensureRepoReady(repoPath, false);
+            }
         }
 
         // Check every 5s
