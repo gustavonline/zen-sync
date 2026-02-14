@@ -300,7 +300,13 @@ async function createNewRepo(repoPath) {
     try {
         if (!fs.existsSync(repoPath)) fs.mkdirSync(repoPath, { recursive: true });
 
-        await execa('git', ['init'], { cwd: repoPath });
+        try {
+            await execa('git', ['init', '-b', 'main'], { cwd: repoPath });
+        } catch {
+            // Fallback for older Git versions that don't support `git init -b`
+            await execa('git', ['init'], { cwd: repoPath });
+            await execa('git', ['branch', '-M', 'main'], { cwd: repoPath });
+        }
 
         const profilePath = path.join(repoPath, 'profile');
         if (!fs.existsSync(profilePath)) fs.mkdirSync(profilePath);

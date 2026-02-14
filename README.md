@@ -31,6 +31,17 @@ npm install -g zensync
     zensync watch
     ```
 
+## Branch Naming
+
+ZenSync uses `main` as the default branch for profile repositories.
+
+If you have an older profile repo that still uses `master`, rename it:
+
+```bash
+git branch -m master main
+git push -u origin main
+```
+
 ## Development
 
 If you want to contribute to ZenSync or develop features:
