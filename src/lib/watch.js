@@ -29,12 +29,6 @@ async function checkZen() {
 }
 
 async function ensureRepoReady(repoPath, notify = false) {
-    const branch = await getCurrentBranch(repoPath);
-    if (branch) {
-        repoIssueActive = false;
-        return true;
-    }
-
     const shouldAnnounce = !repoIssueActive;
 
     if (await isRebaseInProgress(repoPath)) {
@@ -61,6 +55,12 @@ async function ensureRepoReady(repoPath, notify = false) {
 
         repoIssueActive = true;
         return false;
+    }
+
+    const branch = await getCurrentBranch(repoPath);
+    if (branch) {
+        repoIssueActive = false;
+        return true;
     }
 
     if (shouldAnnounce) {

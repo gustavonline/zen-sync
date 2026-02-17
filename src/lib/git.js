@@ -1,8 +1,42 @@
+import fs from 'fs';
+import path from 'path';
 import { execa } from 'execa';
 
 const formatGitError = (error) => {
     return error?.shortMessage || error?.stderr || error?.message || 'Unknown git error';
 };
+
+function getGitMetaPath(cwd, name) {
+    return path.join(cwd, '.git', name);
+}
+
+function isClearlyStaleRebaseDir(dirPath) {
+    if (!fs.existsSync(dirPath)) return false;
+
+    const entries = fs.readdirSync(dirPath);
+    if (entries.length === 0) return true;
+
+    // We've observed interrupted pulls leaving only "autostash" behind.
+    if (entries.length === 1 && entries[0] === 'autostash') return true;
+
+    return false;
+}
+
+function cleanupStaleRebaseState(cwd) {
+    const rebaseMerge = getGitMetaPath(cwd, 'rebase-merge');
+    const rebaseApply = getGitMetaPath(cwd, 'rebase-apply');
+
+    let cleaned = false;
+
+    for (const dirPath of [rebaseMerge, rebaseApply]) {
+        if (isClearlyStaleRebaseDir(dirPath)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+            cleaned = true;
+        }
+    }
+
+    return cleaned;
+}
 
 export async function gitAdd(cwd) {
     await execa('git', ['add', '.'], { cwd });
@@ -28,7 +62,14 @@ export async function gitPush(cwd) {
 
 export async function gitPull(cwd) {
     try {
-        await execa('git', ['pull', '--rebase', '--autostash'], { cwd });
+        cleanupStaleRebaseState(cwd);
+
+        const branch = await getCurrentBranch(cwd);
+        const args = branch
+            ? ['pull', '--rebase', '--autostash', 'origin', branch]
+            : ['pull', '--rebase', '--autostash'];
+
+        await execa('git', args, { cwd });
         return { success: true };
     } catch (error) {
         return { success: false, error: formatGitError(error) };
@@ -50,6 +91,12 @@ export async function getCurrentBranch(cwd) {
 }
 
 export async function isRebaseInProgress(cwd) {
+    const hasRebaseDirs =
+        fs.existsSync(getGitMetaPath(cwd, 'rebase-merge')) ||
+        fs.existsSync(getGitMetaPath(cwd, 'rebase-apply'));
+
+    if (hasRebaseDirs) return true;
+
     try {
         await execa('git', ['rev-parse', '--quiet', '--verify', 'REBASE_HEAD'], { cwd });
         return true;
@@ -63,6 +110,12 @@ export async function gitAbortRebase(cwd) {
         await execa('git', ['rebase', '--abort'], { cwd });
         return { success: true };
     } catch (error) {
+        // If this was just stale rebase metadata, clean it and move on.
+        const cleaned = cleanupStaleRebaseState(cwd);
+        if (cleaned) {
+            return { success: true };
+        }
+
         return { success: false, error: formatGitError(error) };
     }
 }
