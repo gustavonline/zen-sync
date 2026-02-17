@@ -19,3 +19,6 @@ build/
 
 # Config files
 .env
+
+# Runtime-generated startup launcher (created on Windows by `zensync startup`)
+scripts/launch-silent.vbs
