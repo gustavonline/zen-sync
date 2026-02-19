@@ -12,6 +12,7 @@ import {
     gitAbortRebase
 } from './git.js';
 import { log } from './logger.js';
+import { enforceClientVersionGate } from './clientVersionGate.js';
 import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 let wasRunning = false;
@@ -91,6 +92,7 @@ function isLikelyProfileLockError(errorText = '') {
 }
 
 let lockIssueActive = false;
+let versionGateIssueActive = false;
 
 async function performSync(repoPath, message, notify = true) {
     try {
@@ -125,6 +127,25 @@ async function performSync(repoPath, message, notify = true) {
         if (lockIssueActive) {
             log('✅ Profile lock cleared. Sync resumed.', 'success');
             lockIssueActive = false;
+        }
+
+        const versionGate = await enforceClientVersionGate(repoPath);
+        if (!versionGate.ok) {
+            if (!versionGateIssueActive) {
+                log(`⛔ Sync blocked by ZenSync version gate: ${versionGate.reason}`, 'error');
+                notifier.notify({
+                    title: 'ZenSync',
+                    message: 'Update required before this machine can push. Check logs for details.',
+                    wait: true
+                });
+            }
+            versionGateIssueActive = true;
+            return false;
+        }
+
+        if (versionGateIssueActive) {
+            log('✅ ZenSync version requirement satisfied. Sync resumed.', 'success');
+            versionGateIssueActive = false;
         }
 
         await gitAdd(repoPath);
