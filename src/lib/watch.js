@@ -93,6 +93,45 @@ function isLikelyProfileLockError(errorText = '') {
 
 let lockIssueActive = false;
 let versionGateIssueActive = false;
+let lastVersionGateNotifyAt = 0;
+const VERSION_GATE_NOTIFY_COOLDOWN_MS = 10 * 60 * 1000;
+
+async function ensureClientVersionAllowed(repoPath) {
+    const versionGate = await enforceClientVersionGate(repoPath);
+    if (!versionGate.ok) {
+        const shouldAnnounce = !versionGateIssueActive;
+        const shouldNotify =
+            shouldAnnounce ||
+            (Date.now() - lastVersionGateNotifyAt >= VERSION_GATE_NOTIFY_COOLDOWN_MS);
+
+        if (shouldAnnounce) {
+            log(`⛔ Sync blocked by ZenSync version gate: ${versionGate.reason}`, 'error');
+        }
+
+        if (shouldNotify) {
+            const shortReason = versionGate.reason.length > 180
+                ? `${versionGate.reason.slice(0, 177)}...`
+                : versionGate.reason;
+
+            notifier.notify({
+                title: 'ZenSync update required',
+                message: shortReason,
+                wait: true
+            });
+            lastVersionGateNotifyAt = Date.now();
+        }
+
+        versionGateIssueActive = true;
+        return false;
+    }
+
+    if (versionGateIssueActive) {
+        log('✅ ZenSync version requirement satisfied. Sync resumed.', 'success');
+    }
+
+    versionGateIssueActive = false;
+    return true;
+}
 
 async function performSync(repoPath, message, notify = true) {
     try {
@@ -129,23 +168,8 @@ async function performSync(repoPath, message, notify = true) {
             lockIssueActive = false;
         }
 
-        const versionGate = await enforceClientVersionGate(repoPath);
-        if (!versionGate.ok) {
-            if (!versionGateIssueActive) {
-                log(`⛔ Sync blocked by ZenSync version gate: ${versionGate.reason}`, 'error');
-                notifier.notify({
-                    title: 'ZenSync',
-                    message: 'Update required before this machine can push. Check logs for details.',
-                    wait: true
-                });
-            }
-            versionGateIssueActive = true;
+        if (!(await ensureClientVersionAllowed(repoPath))) {
             return false;
-        }
-
-        if (versionGateIssueActive) {
-            log('✅ ZenSync version requirement satisfied. Sync resumed.', 'success');
-            versionGateIssueActive = false;
         }
 
         await gitAdd(repoPath);
@@ -240,6 +264,11 @@ export async function watch() {
         setProcessState(process.pid, 'running');
 
         if (!(await ensureRepoReady(repoPath, false))) {
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+        }
+
+        if (!(await ensureClientVersionAllowed(repoPath))) {
             await new Promise(r => setTimeout(r, 5000));
             continue;
         }
