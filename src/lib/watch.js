@@ -79,57 +79,85 @@ async function ensureRepoReady(repoPath, notify = false) {
     return false;
 }
 
+function isLikelyProfileLockError(errorText = '') {
+    const text = errorText.toLowerCase();
+    return (
+        text.includes('unable to unlink old') ||
+        text.includes('could not reset --hard') ||
+        text.includes('invalid argument') ||
+        text.includes('device or resource busy') ||
+        text.includes('index.lock')
+    );
+}
+
+let lockIssueActive = false;
+
 async function performSync(repoPath, message, notify = true) {
     try {
         if (!(await ensureRepoReady(repoPath, notify))) {
             return false;
         }
 
-        await gitAdd(repoPath);
-        if (await hasChanges(repoPath)) {
-            const commitResult = await gitCommit(repoPath, message);
-            if (commitResult.success) {
-                // Pull remote changes to avoid conflicts if device was asleep/offline
-                const pullResult = await gitPull(repoPath);
-                if (!pullResult.success) {
-                    log(`❌ Pull failed: ${pullResult.error}`, 'error');
-                    await ensureRepoReady(repoPath, false);
-                    if (notify) {
-                        notifier.notify({
-                            title: 'ZenSync',
-                            message: 'Could not pull latest cloud changes. Check logs.',
-                            wait: true
-                        });
-                    }
-                    return false;
+        // Pull first to avoid piling up local commits if remote changed.
+        const pullResult = await gitPull(repoPath);
+        if (!pullResult.success) {
+            if (isLikelyProfileLockError(pullResult.error)) {
+                if (!lockIssueActive) {
+                    log('⚠️ Sync temporarily blocked: profile files are locked by Zen. Will retry automatically.', 'warning');
                 }
-
-                const pushResult = await gitPush(repoPath);
-                if (pushResult.success) {
-                    log('✅ Synced to cloud.', 'success');
-                    if (notify) notifier.notify({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
-                    updateLastSync(Date.now());
-                    return true;
-                }
-
-                log(`❌ Push failed: ${pushResult.error}`, 'error');
-                notifier.notify({
-                    title: 'ZenSync',
-                    message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
-                    wait: true
-                });
+                lockIssueActive = true;
             } else {
-                log(`❌ Commit failed: ${commitResult.error}`, 'error');
-                notifier.notify({
-                    title: 'ZenSync',
-                    message: 'Hiccup! 🐸\nCommit failed. Check logs.',
-                    wait: true
-                });
+                lockIssueActive = false;
+                log(`❌ Pull failed: ${pullResult.error}`, 'error');
+                if (notify) {
+                    notifier.notify({
+                        title: 'ZenSync',
+                        message: 'Could not pull latest cloud changes. Check logs.',
+                        wait: true
+                    });
+                }
             }
-        } else {
+
+            await ensureRepoReady(repoPath, false);
+            return false;
+        }
+
+        if (lockIssueActive) {
+            log('✅ Profile lock cleared. Sync resumed.', 'success');
+            lockIssueActive = false;
+        }
+
+        await gitAdd(repoPath);
+        if (!(await hasChanges(repoPath))) {
             log('No changes found.', 'info');
             return true;
         }
+
+        const commitResult = await gitCommit(repoPath, message);
+        if (!commitResult.success) {
+            log(`❌ Commit failed: ${commitResult.error}`, 'error');
+            notifier.notify({
+                title: 'ZenSync',
+                message: 'Hiccup! 🐸\nCommit failed. Check logs.',
+                wait: true
+            });
+            return false;
+        }
+
+        const pushResult = await gitPush(repoPath);
+        if (pushResult.success) {
+            log('✅ Synced to cloud.', 'success');
+            if (notify) notifier.notify({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
+            updateLastSync(Date.now());
+            return true;
+        }
+
+        log(`❌ Push failed: ${pushResult.error}`, 'error');
+        notifier.notify({
+            title: 'ZenSync',
+            message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
+            wait: true
+        });
     } catch (error) {
         log(`Sync warning: ${error.message}`, 'warning');
 

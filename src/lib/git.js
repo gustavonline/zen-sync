@@ -3,7 +3,12 @@ import path from 'path';
 import { execa } from 'execa';
 
 const formatGitError = (error) => {
-    return error?.shortMessage || error?.stderr || error?.message || 'Unknown git error';
+    const stderr = error?.stderr?.trim();
+    const short = error?.shortMessage?.trim();
+    const message = error?.message?.trim();
+
+    const details = [stderr, short, message].filter(Boolean);
+    return details.length ? details.join(' | ') : 'Unknown git error';
 };
 
 function getGitMetaPath(cwd, name) {
@@ -38,7 +43,27 @@ function cleanupStaleRebaseState(cwd) {
     return cleaned;
 }
 
+function cleanupStaleIndexLock(cwd, maxAgeMs = 2 * 60 * 1000) {
+    const lockPath = getGitMetaPath(cwd, 'index.lock');
+    if (!fs.existsSync(lockPath)) return false;
+
+    try {
+        const stat = fs.statSync(lockPath);
+        const ageMs = Date.now() - stat.mtimeMs;
+
+        if (ageMs >= maxAgeMs) {
+            fs.rmSync(lockPath, { force: true });
+            return true;
+        }
+    } catch {
+        // Best-effort cleanup only.
+    }
+
+    return false;
+}
+
 export async function gitAdd(cwd) {
+    cleanupStaleIndexLock(cwd);
     await execa('git', ['add', '.'], { cwd });
 }
 
@@ -63,6 +88,7 @@ export async function gitPush(cwd) {
 export async function gitPull(cwd) {
     try {
         cleanupStaleRebaseState(cwd);
+        cleanupStaleIndexLock(cwd);
 
         const branch = await getCurrentBranch(cwd);
         const args = branch
