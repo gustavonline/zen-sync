@@ -62,3 +62,7 @@ If you want to contribute to ZenSync or develop features:
     This makes the `zensync` command point to your local source code.
 
 4.  Test with a separate profile repository (e.g., `../zen-profile-data`) by running `zensync` commands there.
+
+## Setup Guides
+
+- macOS setup (new machine): [`docs/mac-setup.md`](docs/mac-setup.md)
