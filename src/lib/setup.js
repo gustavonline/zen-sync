@@ -326,6 +326,9 @@ async function createNewRepo(repoPath) {
             'storage/', 'safebrowsing/', 'datareporting/',
             'saved-telemetry-pings/', 'crashes/', 'minidumps/', 'shader-cache/',
             '',
+            '# Media Plugins (downloaded binaries)',
+            'gmp-gmpopenh264/', 'gmp-widevinecdm/',
+            '',
             '# SQLite Temp Files',
             '*.sqlite-wal', '*.sqlite-shm', '*.db-wal', '*.db-shm',
             '',
@@ -345,7 +348,7 @@ async function createNewRepo(repoPath) {
             '.DS_Store', 'Thumbs.db', 'node_modules/',
             '',
             '# Session & History (handled by Firefox Sync)',
-            'cookies.sqlite', 'places.sqlite', 'favicons.sqlite',
+            'sessionstore.jsonlz4', 'cookies.sqlite', 'places.sqlite', 'favicons.sqlite',
         ].join('\n') + '\n');
 
         // package.json
