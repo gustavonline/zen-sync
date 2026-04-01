@@ -27,7 +27,10 @@ async function run() {
     const files = [
         'profile/cookies.sqlite',
         'profile/places.sqlite',
-        'profile/favicons.sqlite'
+        'profile/favicons.sqlite',
+        'profile/sessionstore-backups/recovery.jsonlz4',
+        'profile/zen-sessions.jsonlz4',
+        'profile/AlternateServices.bin'
     ];
 
     for (const file of files) {

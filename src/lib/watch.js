@@ -8,8 +8,11 @@ import {
     gitPull,
     hasChanges,
     getCurrentBranch,
+    hasUnmergedPaths,
+    recoverUnmergedConflictState,
     isRebaseInProgress,
-    gitAbortRebase
+    gitAbortRebase,
+    isUnmergedConflictError
 } from './git.js';
 import { log } from './logger.js';
 import { enforceClientVersionGate } from './clientVersionGate.js';
@@ -17,7 +20,9 @@ import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 let wasRunning = false;
 let lastSyncTime = Date.now();
+let lastIdlePullAt = 0;
 let repoIssueActive = false;
+const IDLE_PULL_INTERVAL_MS = 60 * 1000;
 
 async function checkZen() {
     const list = await psList();
@@ -50,6 +55,35 @@ async function ensureRepoReady(repoPath, notify = false) {
             notifier.notify({
                 title: 'ZenSync',
                 message: 'Git rebase got stuck. ZenSync attempted auto-recovery. Check logs.',
+                wait: true
+            });
+        }
+
+        repoIssueActive = true;
+        return false;
+    }
+
+    if (await hasUnmergedPaths(repoPath)) {
+        if (shouldAnnounce) {
+            log('⚠️ Detected unresolved git conflict state. Attempting automatic recovery...', 'warning');
+        }
+
+        const recovery = await recoverUnmergedConflictState(repoPath);
+        if (recovery.success) {
+            if (shouldAnnounce) {
+                const location = recovery.recoveryDir ? ` (backup: ${recovery.recoveryDir})` : '';
+                log(`✅ Cleared unresolved git conflict state${location}. Sync will retry shortly.`, 'warning');
+            }
+        } else if (shouldAnnounce) {
+            log(`❌ Failed to recover unresolved git state: ${recovery.error}`, 'error');
+        }
+
+        if (notify && shouldAnnounce) {
+            notifier.notify({
+                title: 'ZenSync',
+                message: recovery.success
+                    ? 'Git conflict state was auto-recovered. Sync will retry.'
+                    : 'Git conflict state could not be auto-recovered. Check logs.',
                 wait: true
             });
         }
@@ -142,6 +176,11 @@ async function performSync(repoPath, message, notify = true) {
         // Pull first to avoid piling up local commits if remote changed.
         const pullResult = await gitPull(repoPath);
         if (!pullResult.success) {
+            if (isUnmergedConflictError(pullResult.error)) {
+                await ensureRepoReady(repoPath, notify);
+                return false;
+            }
+
             if (isLikelyProfileLockError(pullResult.error)) {
                 if (!lockIssueActive) {
                     log('⚠️ Sync temporarily blocked: profile files are locked by Zen. Will retry automatically.', 'warning');
@@ -161,6 +200,12 @@ async function performSync(repoPath, message, notify = true) {
 
             await ensureRepoReady(repoPath, false);
             return false;
+        }
+
+        lastIdlePullAt = Date.now();
+
+        if (pullResult.recovered && pullResult.recoveryDir) {
+            log(`🛟 Pull recovery moved conflicting untracked files to: ${pullResult.recoveryDir}`, 'warning');
         }
 
         if (lockIssueActive) {
@@ -252,11 +297,19 @@ export async function watch() {
         clearProcessState();
     });
 
-    // Initial pull
-    const initialPull = await gitPull(repoPath);
-    if (!initialPull.success) {
-        log(`⚠️ Initial pull failed: ${initialPull.error}`, 'warning');
-        await ensureRepoReady(repoPath, false);
+    // Initial pull (skip while Zen is running to avoid lock/conflict storms)
+    const zenRunningAtStart = await checkZen();
+    if (zenRunningAtStart) {
+        wasRunning = true;
+        log('Zen Browser already running on startup. Skipping initial pull for safety.', 'warning');
+    } else {
+        const initialPull = await gitPull(repoPath);
+        if (!initialPull.success) {
+            log(`⚠️ Initial pull failed: ${initialPull.error}`, 'warning');
+            await ensureRepoReady(repoPath, false);
+        } else {
+            lastIdlePullAt = Date.now();
+        }
     }
 
     while (true) {
@@ -304,10 +357,15 @@ export async function watch() {
                 lastSyncTime = Date.now();
             }
 
-            // Idle pull
-            const idlePull = await gitPull(repoPath);
-            if (!idlePull.success && idlePull.error.includes('rebase')) {
-                await ensureRepoReady(repoPath, false);
+            // Idle pull (throttled)
+            const now = Date.now();
+            if (now - lastIdlePullAt >= IDLE_PULL_INTERVAL_MS) {
+                const idlePull = await gitPull(repoPath);
+                lastIdlePullAt = now;
+
+                if (!idlePull.success && (idlePull.error.includes('rebase') || isUnmergedConflictError(idlePull.error))) {
+                    await ensureRepoReady(repoPath, false);
+                }
             }
         }
 

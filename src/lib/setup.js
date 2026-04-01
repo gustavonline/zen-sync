@@ -318,6 +318,7 @@ async function createNewRepo(repoPath) {
             '# Caches & Temp',
             'cache/', 'caches/', 'startupCache/', 'thumbnails/',
             '*.tmp', '*.bak', '*.log',
+            '.zensync-recovery/',
             '',
             '# Lock Files',
             'lock', '.parentlock', 'parent.lock',
@@ -349,6 +350,16 @@ async function createNewRepo(repoPath) {
             '',
             '# Session & History (handled by Firefox Sync)',
             'sessionstore.jsonlz4', 'cookies.sqlite', 'places.sqlite', 'favicons.sqlite',
+            '',
+            '# Highly-volatile session snapshots (major conflict source)',
+            'sessionstore-backups/',
+            'zen-sessions.jsonlz4',
+            'zen-sessions-backup/',
+            '',
+            '# Machine / network runtime state (not useful to sync)',
+            'AlternateServices.bin',
+            'SiteSecurityServiceState.bin',
+            'compatibility.ini',
         ].join('\n') + '\n');
 
         // package.json
