@@ -39,7 +39,7 @@ npm link
 NPM install after publishing:
 
 ```bash
-npm install -g zensync
+npm install -g @gustavonline/zensync
 ```
 
 To update a source install:
@@ -55,7 +55,7 @@ zensync restart
 To update an npm install after publishing:
 
 ```bash
-npm update -g zensync
+npm update -g @gustavonline/zensync
 zensync restart
 ```
 

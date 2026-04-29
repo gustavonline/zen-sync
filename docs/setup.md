@@ -28,9 +28,9 @@ zensync status
 NPM install/update after publishing:
 
 ```bash
-npm install -g zensync
+npm install -g @gustavonline/zensync
 # later:
-npm update -g zensync
+npm update -g @gustavonline/zensync
 zensync restart
 ```
 
