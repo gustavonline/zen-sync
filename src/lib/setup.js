@@ -5,7 +5,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execa } from 'execa';
+import psList from 'ps-list';
 import config from './config.js';
+import { enableStartup } from './startup.js';
+import { startDaemon, stopDaemon, getDaemonStatus } from './daemon.js';
 
 // ─── Platform Helpers ─────────────────────────────────────────────────
 
@@ -149,6 +152,120 @@ function shortPath(p) {
     return p.startsWith(home) ? '~' + p.slice(home.length) : p;
 }
 
+const LOCAL_ONLY_PROFILE_PATHS = [
+    'profile/key4.db',
+    'profile/cert9.db',
+    'profile/logins.json',
+    'profile/logins.db',
+    'profile/logins-backup.json',
+    'profile/cookies.sqlite',
+    'profile/places.sqlite',
+    'profile/favicons.sqlite',
+    'profile/formhistory.sqlite',
+    'profile/storage',
+    'profile/storage.sqlite',
+    'profile/webappsstore.sqlite',
+    'profile/tabnotes.sqlite',
+    'profile/autofill-profiles.json',
+];
+
+function copyPathIfExists(source, destination) {
+    if (!fs.existsSync(source)) return false;
+
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    const stat = fs.lstatSync(source);
+    if (stat.isDirectory()) {
+        fs.cpSync(source, destination, { recursive: true, force: true, dereference: true });
+    } else {
+        fs.copyFileSync(source, destination);
+    }
+    return true;
+}
+
+function backupLocalOnlyProfileFiles(repoPath) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupDir = path.join(os.homedir(), `.zensync-local-only-backup-${ts}`);
+    let count = 0;
+
+    for (const relPath of LOCAL_ONLY_PROFILE_PATHS) {
+        const source = path.join(repoPath, relPath);
+        const destination = path.join(backupDir, relPath);
+        if (copyPathIfExists(source, destination)) count++;
+    }
+
+    return count > 0 ? { backupDir, count } : { backupDir: null, count: 0 };
+}
+
+function restoreLocalOnlyProfileFiles(repoPath, backupDir) {
+    if (!backupDir || !fs.existsSync(backupDir)) return 0;
+
+    let count = 0;
+    for (const relPath of LOCAL_ONLY_PROFILE_PATHS) {
+        const source = path.join(backupDir, relPath);
+        const destination = path.join(repoPath, relPath);
+        if (copyPathIfExists(source, destination)) count++;
+    }
+    return count;
+}
+
+async function resetProfileRepoToOrigin(repoPath, branch = 'main') {
+    const backup = backupLocalOnlyProfileFiles(repoPath);
+
+    await execa('git', ['fetch', 'origin'], { cwd: repoPath });
+    await execa('git', ['reset', '--hard', `origin/${branch}`], { cwd: repoPath });
+
+    const restored = restoreLocalOnlyProfileFiles(repoPath, backup.backupDir);
+    return { ...backup, restored };
+}
+
+async function isZenRunning() {
+    const list = await psList();
+    return list.some(p => {
+        const name = p.name.toLowerCase();
+        return name === 'zen' || name === 'zen.exe' || name === 'zen-bin' || name.includes('zen browser');
+    });
+}
+
+async function ensureZenClosed(options = {}) {
+    if (!(await isZenRunning())) return true;
+
+    card([
+        `${WARN('⚠️  Zen Browser is currently open')}`,
+        ``,
+        `${DIM('    Setup edits profile config and may pull profile files.')}`,
+        `${DIM('    Close Zen first so your data stays consistent.')}`,
+    ], chalk.yellow);
+    gap();
+
+    if (options.yes) {
+        row('⏭️', WARN('Non-interactive setup stopped because Zen is open.'));
+        return false;
+    }
+
+    const { waitForClose } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'waitForClose',
+        message: 'Close Zen Browser now, then continue?',
+        default: true,
+        prefix: chalk.cyan('?'),
+    }]);
+
+    if (!waitForClose) return false;
+
+    const s = spinner('Waiting for Zen Browser to close...');
+    const deadline = Date.now() + 2 * 60 * 1000;
+    while (Date.now() < deadline) {
+        if (!(await isZenRunning())) {
+            s.succeed('Zen Browser is closed.');
+            return true;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    s.fail('Zen Browser is still running. Close it and run setup again.');
+    return false;
+}
+
 // ─── UI Primitives ────────────────────────────────────────────────────
 
 const DIM   = chalk.gray;
@@ -195,9 +312,9 @@ function spinner(text) {
 // ─── Phase 1: Welcome & Directory ─────────────────────────────────────
 
 async function chooseDirectory(options) {
-    if (options.yes) return process.cwd();
-
     const defaultPath = path.join(os.homedir(), 'zensync-data');
+    if (options.yes) return defaultPath;
+
     const cwd = process.cwd();
 
     // Detect if we're already in a valid profile repo
@@ -247,12 +364,58 @@ async function chooseDirectory(options) {
 
 // ─── Phase 2: Repository Setup ────────────────────────────────────────
 
-async function setupRepository(repoPath) {
+async function setupRepository(repoPath, options = {}) {
     const isGit = fs.existsSync(path.join(repoPath, '.git'));
     const hasProfile = fs.existsSync(path.join(repoPath, 'profile'));
 
     if (isGit && hasProfile) {
         row('✅', OK('Repository already configured.'));
+        const s = spinner('Pulling latest profile snapshot...');
+        try {
+            const branch = (await execa('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: repoPath })).stdout.trim() || 'main';
+            await execa('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoPath });
+            s.succeed('Profile repo is up to date.');
+        } catch (e) {
+            s.warn('Could not pull cleanly. Remote history may have been compacted.');
+
+            let shouldReset = options.yes;
+            if (!options.yes) {
+                gap();
+                card([
+                    `${WARN('Reset tracked profile files to the latest cloud snapshot?')}`,
+                    ``,
+                    `${DIM('    ZenSync will first back up local-only sensitive files')}`,
+                    `${DIM('    like cookies/password DBs, then restore them after reset.')}`,
+                ], chalk.yellow);
+                gap();
+
+                const answer = await inquirer.prompt([{
+                    type: 'confirm',
+                    name: 'reset',
+                    message: 'Reset this profile repo to origin/main now?',
+                    default: true,
+                    prefix: chalk.cyan('?'),
+                }]);
+                shouldReset = answer.reset;
+            }
+
+            if (shouldReset) {
+                const reset = spinner('Resetting profile repo safely...');
+                try {
+                    const result = await resetProfileRepoToOrigin(repoPath, 'main');
+                    reset.succeed('Profile repo reset to latest cloud snapshot.');
+                    if (result.backupDir) {
+                        row('🛡️', DIM(`Local-only backup: ${shortPath(result.backupDir)}`));
+                        row('↩️', DIM(`Restored ${result.restored} local-only item(s).`));
+                    }
+                } catch (resetError) {
+                    reset.fail('Safe reset failed: ' + resetError.message);
+                    row('💡', DIM('ZenSync will retry pulls in the background.'));
+                }
+            } else {
+                row('💡', DIM('ZenSync will retry pulls in the background.'));
+            }
+        }
         return true;
     }
 
@@ -691,7 +854,7 @@ async function linkProfile(repoPath) {
 // ─── Main ─────────────────────────────────────────────────────────────
 
 export async function setup(options = {}) {
-    const T = 3; // total steps
+    const T = 4; // total steps
 
     // ── Welcome ──
     gap();
@@ -703,6 +866,18 @@ export async function setup(options = {}) {
         `   ${DIM('It only takes a minute.')} ✨`,
         ``,
     ]);
+
+    const safeToContinue = await ensureZenClosed(options);
+    if (!safeToContinue) {
+        gap();
+        card([
+            `${WARN('Setup paused.')}`,
+            ``,
+            `${DIM('Close Zen Browser and run:')} ${CYAN('zensync setup')}`,
+        ], chalk.yellow);
+        gap();
+        return;
+    }
 
     // ── Step 1: Directory ──
     step(1, T, '📁', 'Storage Location');
@@ -723,7 +898,7 @@ export async function setup(options = {}) {
     // ── Step 2: Repository ──
     step(2, T, '📦', 'Profile Repository');
 
-    const ready = await setupRepository(repoPath);
+    const ready = await setupRepository(repoPath, options);
     if (!ready) {
         gap();
         card([
@@ -742,6 +917,47 @@ export async function setup(options = {}) {
     process.chdir(repoPath);
     await linkProfile(repoPath);
 
+    // ── Step 4: Background ──
+    step(4, T, '⚙️', 'Background Sync');
+
+    let shouldEnableStartup = options.startup !== false;
+    if (!options.yes && shouldEnableStartup) {
+        const answer = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'enable',
+            message: 'Start ZenSync automatically when you log in?',
+            default: true,
+            prefix: chalk.cyan('?'),
+        }]);
+        shouldEnableStartup = answer.enable;
+    }
+
+    if (shouldEnableStartup) {
+        await enableStartup();
+    } else {
+        row('⏭️', DIM('Startup skipped.'));
+    }
+
+    let shouldStartNow = options.start !== false;
+    if (!options.yes && shouldStartNow) {
+        const answer = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'start',
+            message: 'Start/restart ZenSync in the background now?',
+            default: true,
+            prefix: chalk.cyan('?'),
+        }]);
+        shouldStartNow = answer.start;
+    }
+
+    if (shouldStartNow) {
+        const status = getDaemonStatus();
+        if (status.isRunning) stopDaemon();
+        startDaemon();
+    } else {
+        row('⏭️', DIM('Background watcher not started.'));
+    }
+
     // ── Summary ──
     gap();
     const ok = profileHasData(repoPath);
@@ -750,7 +966,7 @@ export async function setup(options = {}) {
         `   🎉  ${chalk.bold.green('All done! ZenSync is ready.')}`,
         ``,
         `   ${DIM('Your profile is synced and linked.')}`,
-        `   ${DIM('Close Zen Browser to trigger a sync, or run watch.')}`,
+        `   ${DIM('ZenSync runs quietly in the background.')}`,
         ``,
     ] : [
         ``,
@@ -763,7 +979,7 @@ export async function setup(options = {}) {
 
     gap();
     row('📂', `Data:   ${CYAN(shortPath(repoPath))}`);
-    row('🚀', `Sync:   ${CYAN('zensync watch')}`);
+    row('🚀', `Sync:   ${CYAN('background watcher')}`);
     row('📊', `Status: ${CYAN('zensync status')}`);
     gap();
     line();

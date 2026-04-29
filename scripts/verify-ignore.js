@@ -1,44 +1,80 @@
 import { execa } from 'execa';
 import chalk from 'chalk';
 
-async function checkIgnore(file) {
+async function isIgnored(file) {
     try {
         await execa('git', ['check-ignore', file]);
-        console.log(chalk.green('✅ ' + file + ' is correctly ignored.'));
+        return true;
     } catch {
-        console.log(chalk.red('❌ ' + file + ' is NOT ignored!'));
-        process.exit(1);
+        return false;
     }
 }
 
-async function checkTracked(file) {
+async function checkIgnored(file) {
+    if (await isIgnored(file)) {
+        console.log(chalk.green('✅ ' + file + ' is ignored.'));
+        return;
+    }
+
+    console.log(chalk.red('❌ ' + file + ' is NOT ignored.'));
+    process.exit(1);
+}
+
+async function checkNotIgnored(file) {
+    if (!(await isIgnored(file))) {
+        console.log(chalk.green('✅ ' + file + ' is syncable.'));
+        return;
+    }
+
+    console.log(chalk.red('❌ ' + file + ' is ignored but should sync.'));
+    process.exit(1);
+}
+
+async function checkNotTracked(file) {
     const { stdout } = await execa('git', ['ls-files', file]);
     if (stdout.trim() === '') {
-        console.log(chalk.green('✅ ' + file + ' is correctly removed from tracking.'));
-    } else {
-        console.log(chalk.red('❌ ' + file + ' is STILL tracked!'));
-        process.exit(1);
+        console.log(chalk.green('✅ ' + file + ' is not tracked.'));
+        return;
     }
+
+    console.log(chalk.red('❌ ' + file + ' is tracked.'));
+    process.exit(1);
 }
 
 async function run() {
-    console.log('🔍 Verifying Git Configuration...');
-    
-    const files = [
+    console.log('🔍 Verifying ZenSync profile-data ignore policy...');
+
+    const localOnly = [
         'profile/cookies.sqlite',
         'profile/places.sqlite',
         'profile/favicons.sqlite',
-        'profile/sessionstore-backups/recovery.jsonlz4',
-        'profile/zen-sessions.jsonlz4',
+        'profile/formhistory.sqlite',
+        'profile/key4.db',
+        'profile/logins.json',
+        'profile/cert9.db',
+        'profile/storage/example.sqlite',
+        'profile/cache2/entries/example',
+        'profile/gmp/example',
         'profile/AlternateServices.bin'
     ];
 
-    for (const file of files) {
-        await checkIgnore(file);
-        await checkTracked(file);
+    const syncableSession = [
+        'profile/sessionstore.jsonlz4',
+        'profile/sessionstore-backups/recovery.jsonlz4',
+        'profile/zen-sessions.jsonlz4',
+        'profile/zen-sessions-backup/clean.jsonlz4'
+    ];
+
+    for (const file of localOnly) {
+        await checkIgnored(file);
+        await checkNotTracked(file);
     }
-    
-    console.log(chalk.bold.green('\n🎉 All checks passed! ZenSync configuration is correct.'));
+
+    for (const file of syncableSession) {
+        await checkNotIgnored(file);
+    }
+
+    console.log(chalk.bold.green('\n🎉 ZenSync ignore policy looks correct.'));
 }
 
 run();

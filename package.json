@@ -1,22 +1,44 @@
 {
   "name": "zensync",
-  "version": "2.2.0",
-  "description": "Seamlessly sync your Zen Browser profile between **macOS** and **Windows** using GitHub.",
-  "main": "index.js",
+  "version": "2.3.0",
+  "description": "Minimal background sync for Zen Browser profiles across macOS, Windows, and Linux.",
+  "main": "./src/cli.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --check src/cli.js && node --check src/lib/clientVersionGate.js && node --check src/lib/config.js && node --check src/lib/daemon.js && node --check src/lib/git.js && node --check src/lib/logger.js && node --check src/lib/setup.js && node --check src/lib/startup.js && node --check src/lib/state.js && node --check src/lib/watch.js",
+    "prepack": "npm test"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gustavonline/zen-sync.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "zen-browser",
+    "browser-profile",
+    "sync",
+    "firefox",
+    "tabs"
+  ],
+  "author": "Gustav Online",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/gustavonline/zen-sync/issues"
   },
   "homepage": "https://github.com/gustavonline/zen-sync#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "src",
+    "scripts/start-watcher-win.vbs",
+    "scripts/verify-ignore.js",
+    "scripts/zen-watch-mac.sh",
+    "scripts/zen-watch-win.ps1",
+    "docs/setup.md",
+    "docs/mac-setup.md",
+    "README.md",
+    "install_mac.sh",
+    "install_win.ps1"
+  ],
   "dependencies": {
     "chalk": "^5.6.2",
     "commander": "^14.0.3",

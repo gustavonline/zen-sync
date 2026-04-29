@@ -16,13 +16,15 @@ import state from './lib/state.js';
 program
   .name('zensync')
   .description('Seamlessly sync your Zen Browser profile')
-  .version('2.2.0');
+  .version('2.3.0');
 
 // --- Setup & Config ---
 
 program.command('setup')
   .description('Initialize ZenSync')
-  .option('-y, --yes', 'Skip prompts and use current directory')
+  .option('-y, --yes', 'Skip prompts and use defaults')
+  .option('--no-startup', 'Do not enable launch-on-login')
+  .option('--no-start', 'Do not start/restart the background watcher')
   .action(async (options) => {
     await setup(options);
   });

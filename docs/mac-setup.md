@@ -18,8 +18,6 @@ Open Zen once, close it, then run:
 
 ```bash
 zensync setup
-zensync startup
-zensync start
 zensync status
 ```
 

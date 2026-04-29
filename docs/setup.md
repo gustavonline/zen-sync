@@ -14,7 +14,7 @@ Other machines can pull a live checkpoint if no final exists yet, but ZenSync lo
 
 ## Install or update the tool
 
-Use this on any machine where an agent/human needs to update ZenSync:
+Source install/update today:
 
 ```bash
 cd ~/zen-sync 2>/dev/null || git clone https://github.com/gustavonline/zen-sync.git ~/zen-sync && cd ~/zen-sync
@@ -23,6 +23,15 @@ npm install
 npm link
 zensync restart
 zensync status
+```
+
+NPM install/update after publishing:
+
+```bash
+npm install -g zensync
+# later:
+npm update -g zensync
+zensync restart
 ```
 
 On Windows PowerShell, use:
@@ -51,9 +60,9 @@ Close Zen Browser, then run:
 
 ```bash
 zensync setup
-zensync startup
-zensync start
 ```
+
+Setup configures the profile, launch-on-login, and background watcher.
 
 Choose:
 
@@ -79,8 +88,6 @@ cd $HOME\zen-sync
 npm install
 npm link
 zensync setup
-zensync startup
-zensync start
 ```
 
 Zen profile config lives under:
@@ -111,8 +118,6 @@ cd ~/zen-sync
 npm install
 npm link
 zensync setup
-zensync startup
-zensync start
 ```
 
 Zen profile config lives under:
@@ -138,8 +143,6 @@ cd ~/zen-sync
 npm install
 npm link
 zensync setup
-zensync startup
-zensync start
 ```
 
 Zen profile locations detected by ZenSync:

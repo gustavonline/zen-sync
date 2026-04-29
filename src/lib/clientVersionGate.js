@@ -78,31 +78,26 @@ async function isCommitAtLeast(toolRoot, requiredCommit, localCommit) {
 }
 
 async function evaluateCompatibility(toolRoot, local, required) {
-    if (required?.commit) {
-        if (!local.commit) {
-            return {
-                ok: false,
-                reason: `Repo requires ZenSync commit ${required.commit}, but this installation cannot verify a local git commit. Update ZenSync from the git repo and restart.`
-            };
-        }
-
-        const commitOk = await isCommitAtLeast(toolRoot, required.commit, local.commit);
-        if (!commitOk) {
-            return {
-                ok: false,
-                reason: `Repo requires ZenSync commit ${required.commit} (or newer), but local is ${local.commit}. Run 'git pull' in zen-sync and restart.`
-            };
-        }
-
-        return { ok: true };
-    }
-
+    // NPM installs do not have a git commit to verify. Version is the canonical
+    // compatibility gate; commit is accepted only as a legacy/development hint.
     if (required?.version) {
         const cmp = compareSemver(local.version, required.version);
         if (cmp < 0) {
             return {
                 ok: false,
                 reason: `Repo requires ZenSync version ${required.version}+, but local is ${local.version}. Please update ZenSync and restart.`
+            };
+        }
+
+        return { ok: true };
+    }
+
+    if (required?.commit && local.commit) {
+        const commitOk = await isCommitAtLeast(toolRoot, required.commit, local.commit);
+        if (!commitOk) {
+            return {
+                ok: false,
+                reason: `Repo requires ZenSync commit ${required.commit} (or newer), but local is ${local.commit}. Run 'git pull' in zen-sync and restart.`
             };
         }
     }
@@ -115,8 +110,6 @@ function writeRequiredClient(repoPath, local) {
     const data = {
         version: local.version
     };
-
-    if (local.commit) data.commit = local.commit;
 
     const nextText = `${JSON.stringify(data, null, 2)}\n`;
     const currentText = fs.existsSync(lockPath) ? fs.readFileSync(lockPath, 'utf8') : null;

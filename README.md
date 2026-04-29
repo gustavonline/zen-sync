@@ -27,6 +27,8 @@ Note: synced tab/session files can still contain page URLs and tab titles. Keep 
 
 ## Install / update ZenSync
 
+Source install today:
+
 ```bash
 git clone https://github.com/gustavonline/zen-sync.git ~/zen-sync
 cd ~/zen-sync
@@ -34,13 +36,26 @@ npm install
 npm link
 ```
 
-To update later:
+NPM install after publishing:
+
+```bash
+npm install -g zensync
+```
+
+To update a source install:
 
 ```bash
 cd ~/zen-sync
 git pull --rebase
 npm install
 npm link
+zensync restart
+```
+
+To update an npm install after publishing:
+
+```bash
+npm update -g zensync
 zensync restart
 ```
 
@@ -51,9 +66,9 @@ zensync restart
 
 ```bash
 zensync setup
-zensync startup
-zensync start
 ```
+
+Setup configures the profile, enables launch-on-login, and starts/restarts the background watcher.
 
 During setup:
 
