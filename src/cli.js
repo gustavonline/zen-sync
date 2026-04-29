@@ -16,13 +16,13 @@ import state from './lib/state.js';
 program
   .name('zensync')
   .description('Seamlessly sync your Zen Browser profile')
-  .version('2.3.0');
+  .version('2.4.0');
 
 // --- Setup & Config ---
 
 program.command('setup')
-  .description('Initialize ZenSync')
-  .option('-y, --yes', 'Skip prompts and use defaults')
+  .description('Run the guided ZenSync setup wizard')
+  .option('-y, --yes', 'Skip prompts where possible and use defaults')
   .option('--no-startup', 'Do not enable launch-on-login')
   .option('--no-start', 'Do not start/restart the background watcher')
   .action(async (options) => {
@@ -225,7 +225,7 @@ program.command('uninstall')
     console.log(chalk.bold.green('\nZenSync has been uninstalled.'));
     console.log(chalk.white('\nManual steps remaining:'));
     console.log(chalk.gray('  1. Remove the global CLI link:'));
-    console.log(chalk.cyan('     npm uninstall -g zensync'));
+    console.log(chalk.cyan('     npm uninstall -g @gustavonline/zen-sync @gustavonline/zensync'));
     console.log(chalk.gray('  2. Delete the repo folder if no longer needed:'));
     console.log(chalk.cyan(`     rm -rf ${process.cwd()}`));
     if (process.platform === 'win32') {

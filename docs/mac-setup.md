@@ -21,7 +21,9 @@ zensync setup
 zensync status
 ```
 
-For an existing profile repo, choose **Clone existing repo** and use:
+The wizard now checks Git/GitHub early and can also back up + replace a mistaken local repo if you need to re-run setup.
+
+For an existing profile repo, choose **Connect to existing repo** and use:
 
 ```text
 https://github.com/gustavonline/zen-profile-data.git

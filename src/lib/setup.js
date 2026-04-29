@@ -152,6 +152,110 @@ function shortPath(p) {
     return p.startsWith(home) ? '~' + p.slice(home.length) : p;
 }
 
+function stripAnsi(text = '') {
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function makeTimestamp() {
+    return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+function makeBackupPath(targetPath) {
+    return `${targetPath}.backup-${makeTimestamp()}`;
+}
+
+function movePathToBackup(targetPath, backupPath) {
+    fs.renameSync(targetPath, backupPath);
+    return backupPath;
+}
+
+async function getOriginUrl(repoPath) {
+    try {
+        const { stdout } = await execa('git', ['remote', 'get-url', 'origin'], { cwd: repoPath });
+        return stdout.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+async function getGitIdentity() {
+    try {
+        const [{ stdout: name }, { stdout: email }] = await Promise.all([
+            execa('git', ['config', '--global', 'user.name']),
+            execa('git', ['config', '--global', 'user.email'])
+        ]);
+        return {
+            configured: Boolean(name.trim() && email.trim()),
+            name: name.trim(),
+            email: email.trim()
+        };
+    } catch {
+        return { configured: false, name: '', email: '' };
+    }
+}
+
+async function detectGitStatus() {
+    try {
+        const { stdout } = await execa('git', ['--version']);
+        return { installed: true, version: stdout.trim() };
+    } catch (error) {
+        if (error.code === 'ENOENT') return { installed: false, version: null };
+        return { installed: false, version: null };
+    }
+}
+
+async function detectGithubCliStatus() {
+    try {
+        const { stdout: version } = await execa('gh', ['--version']);
+        try {
+            await execa('gh', ['auth', 'status']);
+            let user = '';
+            try {
+                const { stdout } = await execa('gh', ['api', 'user', '--jq', '.login']);
+                user = stdout.trim();
+            } catch {
+                user = '';
+            }
+            return {
+                installed: true,
+                authenticated: true,
+                version: version.split(/\r?\n/)[0]?.trim() || 'gh',
+                user,
+                reason: ''
+            };
+        } catch (error) {
+            const details = [error.stderr, error.stdout, error.shortMessage, error.message]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+            return {
+                installed: true,
+                authenticated: false,
+                version: version.split(/\r?\n/)[0]?.trim() || 'gh',
+                user: '',
+                reason: details || 'GitHub CLI is installed, but you are not logged in.'
+            };
+        }
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return {
+                installed: false,
+                authenticated: false,
+                version: null,
+                user: '',
+                reason: 'GitHub CLI (gh) is not installed.'
+            };
+        }
+        return {
+            installed: false,
+            authenticated: false,
+            version: null,
+            user: '',
+            reason: error.message || 'Could not check GitHub CLI status.'
+        };
+    }
+}
+
 const LOCAL_ONLY_PROFILE_PATHS = [
     'profile/key4.db',
     'profile/cert9.db',
@@ -274,7 +378,7 @@ const OK    = chalk.green;
 const WARN  = chalk.yellow;
 const ERR   = chalk.red;
 const BOLD  = chalk.bold.white;
-const WIDTH = 52;
+const WIDTH = 60;
 
 function ln(text = '') { console.log(text); }
 function gap() { ln(''); }
@@ -298,7 +402,7 @@ function card(lines, borderColor = chalk.cyan) {
     const bot = borderColor('  ╰' + '─'.repeat(inner) + '╯');
     ln(top);
     for (const l of lines) {
-        const stripped = l.replace(/\x1b\[[0-9;]*m/g, '');
+        const stripped = stripAnsi(l);
         const pad = inner - stripped.length;
         ln(borderColor('  │') + ' ' + l + ' '.repeat(Math.max(0, pad - 1)) + borderColor('│'));
     }
@@ -309,10 +413,86 @@ function spinner(text) {
     return ora({ text, color: 'cyan', spinner: 'dots', indent: 2 }).start();
 }
 
+async function runPreflight(options = {}) {
+    const [git, gh, gitIdentity] = await Promise.all([
+        detectGitStatus(),
+        detectGithubCliStatus(),
+        getGitIdentity()
+    ]);
+
+    card([
+        `${git.installed ? '✅' : '❌'}  Git              ${git.installed ? OK('ready') : ERR('missing')}`,
+        `${gh.installed
+            ? (gh.authenticated ? '✅' : '⚠️')
+            : '⚠️'}  GitHub CLI (gh)  ${gh.installed
+            ? (gh.authenticated ? OK('ready') : WARN('needs login'))
+            : WARN('not installed')}`,
+        `${gitIdentity.configured ? '✅' : '⚠️'}  Git identity     ${gitIdentity.configured
+            ? OK(`${gitIdentity.name || 'Configured'} <${gitIdentity.email}>`)
+            : WARN('user.name / user.email not set')}`,
+    ], git.installed ? chalk.cyan : chalk.red);
+    gap();
+
+    if (!git.installed) {
+        card([
+            `${ERR('Git is required before ZenSync can continue.')}`,
+            '',
+            `${DIM('Install Git, then run setup again.')}`,
+            `${DIM('macOS with Homebrew:')} ${CYAN('brew install git')}`,
+            `${DIM('Windows:')} ${CYAN('https://git-scm.com/download/win')}`,
+        ], chalk.red);
+        return { ok: false, git, gh, gitIdentity };
+    }
+
+    if (!gitIdentity.configured) {
+        row('💡', DIM('Commits may fail later until Git identity is configured.'));
+        row('  ', CYAN('git config --global user.name "Your Name"'));
+        row('  ', CYAN('git config --global user.email "you@example.com"'));
+        gap();
+    }
+
+    if (gh.installed && gh.authenticated) {
+        row('🐙', gh.user
+            ? `GitHub CLI is logged in as ${CYAN(gh.user)}`
+            : OK('GitHub CLI is ready.'));
+        return { ok: true, git, gh, gitIdentity };
+    }
+
+    card([
+        `${WARN('GitHub CLI is not fully ready yet.')}`,
+        '',
+        `${DIM('ZenSync can still continue locally, but these steps')}`,
+        `${DIM('will not work smoothly until gh is ready:')}`,
+        `${DIM('  • creating a private GitHub repo automatically')}`,
+        `${DIM('  • logging in quickly during onboarding')}`,
+        '',
+        gh.installed
+            ? `${DIM('Next step:')} ${CYAN('gh auth login')}`
+            : `${DIM('Install first:')} ${CYAN('brew install gh')} ${DIM('then')} ${CYAN('gh auth login')}`,
+    ], chalk.yellow);
+    gap();
+
+    if (options.yes) {
+        row('⚠️', WARN('Continuing without GitHub CLI because --yes was used.'));
+        return { ok: true, git, gh, gitIdentity };
+    }
+
+    const { continueWithoutGh } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'continueWithoutGh',
+        message: 'Continue setup anyway?',
+        default: false,
+        prefix: chalk.yellow('!')
+    }]);
+
+    return { ok: continueWithoutGh, git, gh, gitIdentity };
+}
+
 // ─── Phase 1: Welcome & Directory ─────────────────────────────────────
 
 async function chooseDirectory(options) {
-    const defaultPath = path.join(os.homedir(), 'zensync-data');
+    const savedPath = config.get('repoPath');
+    const defaultPath = savedPath || path.join(os.homedir(), 'zensync-data');
     if (options.yes) return defaultPath;
 
     const cwd = process.cwd();
@@ -324,7 +504,7 @@ async function chooseDirectory(options) {
 
     if (isRepo && hasProfile && !isSourceRepo) {
         card([
-            `📂  Found existing repo here`,
+            `📂  Found an existing ZenSync repo here`,
             DIM(`    ${shortPath(cwd)}`),
         ]);
         gap();
@@ -338,8 +518,11 @@ async function chooseDirectory(options) {
     }
 
     card([
+        `${DIM('ZenSync stores your browser profile in a separate data folder.')}`,
+        `${DIM('This is usually NOT the ZenSync source-code repo.')}`,
+        '',
         `${DIM('Recommended:')}  ${CYAN(shortPath(defaultPath))}`,
-        ``,
+        '',
         `${DIM('Press')} ${BOLD('Enter')} ${DIM('to accept, or type a different path.')}`,
     ]);
     gap();
@@ -347,128 +530,253 @@ async function chooseDirectory(options) {
     const { installDir } = await inquirer.prompt([{
         type: 'input',
         name: 'installDir',
-        message: 'Location:',
+        message: 'Profile data folder:',
         default: defaultPath,
         prefix: chalk.cyan('?'),
         transformer: (input) => CYAN(input)
     }]);
 
-    let repoPath;
     if (installDir.startsWith('~/') || installDir === '~') {
-        repoPath = path.join(os.homedir(), installDir.slice(1));
-    } else {
-        repoPath = path.resolve(installDir);
+        return path.join(os.homedir(), installDir.slice(1));
     }
-    return repoPath;
+    return path.resolve(installDir);
 }
 
 // ─── Phase 2: Repository Setup ────────────────────────────────────────
 
-async function setupRepository(repoPath, options = {}) {
-    const isGit = fs.existsSync(path.join(repoPath, '.git'));
-    const hasProfile = fs.existsSync(path.join(repoPath, 'profile'));
+async function refreshConfiguredRepo(repoPath, options = {}) {
+    row('✅', OK('Using the current ZenSync repo.'));
+    const s = spinner('Pulling latest profile snapshot...');
+    try {
+        const branch = (await execa('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: repoPath })).stdout.trim() || 'main';
+        await execa('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoPath });
+        s.succeed('Profile repo is up to date.');
+    } catch (e) {
+        s.warn('Could not pull cleanly. Remote history may have been compacted.');
 
-    if (isGit && hasProfile) {
-        row('✅', OK('Repository already configured.'));
-        const s = spinner('Pulling latest profile snapshot...');
-        try {
-            const branch = (await execa('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: repoPath })).stdout.trim() || 'main';
-            await execa('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoPath });
-            s.succeed('Profile repo is up to date.');
-        } catch (e) {
-            s.warn('Could not pull cleanly. Remote history may have been compacted.');
+        let shouldReset = options.yes;
+        if (!options.yes) {
+            gap();
+            card([
+                `${WARN('Reset tracked profile files to the latest cloud snapshot?')}`,
+                '',
+                `${DIM('ZenSync will first back up local-only sensitive files')}`,
+                `${DIM('like cookies/password DBs, then restore them after reset.')}`,
+            ], chalk.yellow);
+            gap();
 
-            let shouldReset = options.yes;
-            if (!options.yes) {
-                gap();
-                card([
-                    `${WARN('Reset tracked profile files to the latest cloud snapshot?')}`,
-                    ``,
-                    `${DIM('    ZenSync will first back up local-only sensitive files')}`,
-                    `${DIM('    like cookies/password DBs, then restore them after reset.')}`,
-                ], chalk.yellow);
-                gap();
+            const answer = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'reset',
+                message: 'Reset this profile repo to origin/main now?',
+                default: true,
+                prefix: chalk.cyan('?'),
+            }]);
+            shouldReset = answer.reset;
+        }
 
-                const answer = await inquirer.prompt([{
-                    type: 'confirm',
-                    name: 'reset',
-                    message: 'Reset this profile repo to origin/main now?',
-                    default: true,
-                    prefix: chalk.cyan('?'),
-                }]);
-                shouldReset = answer.reset;
-            }
-
-            if (shouldReset) {
-                const reset = spinner('Resetting profile repo safely...');
-                try {
-                    const result = await resetProfileRepoToOrigin(repoPath, 'main');
-                    reset.succeed('Profile repo reset to latest cloud snapshot.');
-                    if (result.backupDir) {
-                        row('🛡️', DIM(`Local-only backup: ${shortPath(result.backupDir)}`));
-                        row('↩️', DIM(`Restored ${result.restored} local-only item(s).`));
-                    }
-                } catch (resetError) {
-                    reset.fail('Safe reset failed: ' + resetError.message);
-                    row('💡', DIM('ZenSync will retry pulls in the background.'));
+        if (shouldReset) {
+            const reset = spinner('Resetting profile repo safely...');
+            try {
+                const result = await resetProfileRepoToOrigin(repoPath, 'main');
+                reset.succeed('Profile repo reset to latest cloud snapshot.');
+                if (result.backupDir) {
+                    row('🛡️', DIM(`Local-only backup: ${shortPath(result.backupDir)}`));
+                    row('↩️', DIM(`Restored ${result.restored} local-only item(s).`));
                 }
-            } else {
+            } catch (resetError) {
+                reset.fail('Safe reset failed: ' + resetError.message);
                 row('💡', DIM('ZenSync will retry pulls in the background.'));
             }
+        } else {
+            row('💡', DIM('ZenSync will retry pulls in the background.'));
         }
-        return true;
     }
+    return true;
+}
 
-    const empty = isDirEmpty(repoPath);
-
-    if (!empty && !isGit) {
-        card([
-            WARN('⚠️  This directory is not empty'),
-            DIM('   and doesn\'t look like a git repository.'),
-        ], chalk.yellow);
-        gap();
-        const { proceed } = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'proceed',
-            message: 'Initialize a new ZenSync repo here anyway?',
-            default: false
-        }]);
-        if (!proceed) return false;
-        return await createNewRepo(repoPath);
-    }
-
-    // Show two clear options with descriptions
+async function promptFreshSetupAction() {
     card([
-        BOLD('Choose your setup path:'),
-        ``,
-        `${CYAN('Clone')}   ${DIM('Already using ZenSync on another device?')}`,
-        `         ${DIM('Pull your profile from an existing Git repo.')}`,
-        ``,
-        `${CYAN('Create')}  ${DIM('First time here?')}`,
-        `         ${DIM('We\'ll import your local Zen profile into a new repo.')}`,
+        BOLD('Pick the path that matches this machine:'),
+        '',
+        `${DIM('You do not need to type')} ${BOLD('clone')} ${DIM('or')} ${BOLD('create')}${DIM('.')}`,
+        `${DIM('Just select one option below and press Enter.')}`,
+        '',
+        `📥  ${CYAN('Connect to an existing ZenSync repo')}`,
+        `${DIM('    Use this on a new machine when your profile repo')}`,
+        `${DIM('    already exists on GitHub.')}`,
+        '',
+        `✨  ${CYAN('Start a brand-new ZenSync repo')}`,
+        `${DIM('    Use this on your first machine, or when you want')}`,
+        `${DIM('    to throw away the current setup and start over.')}`,
     ]);
     gap();
 
     const { action } = await inquirer.prompt([{
         type: 'list',
         name: 'action',
-        message: 'Select:',
+        message: 'What do you want to do?',
         prefix: chalk.cyan('?'),
         choices: [
-            { name: `📥  Clone existing repo  ${DIM('— I have a Git URL')}`, value: 'clone' },
-            { name: `✨  Create new repo      ${DIM('— First time setup')}`, value: 'create' }
+            { name: `📥  Connect to existing repo  ${DIM('— I already have a GitHub repo')}`, value: 'clone' },
+            { name: `✨  Start brand-new repo     ${DIM('— This is my first machine / I want to start over')}`, value: 'create' }
         ]
     }]);
 
-    if (action === 'clone') return await cloneExistingRepo(repoPath);
-    return await createNewRepo(repoPath);
+    gap();
+    if (action === 'clone') {
+        card([
+            `${BOLD('Next: connect this machine to your existing repo.')}`,
+            '',
+            `${DIM('You will paste the Git URL on the next screen.')}`,
+            `${DIM('ZenSync will clone that repo into your chosen folder.')}`,
+        ]);
+    } else {
+        card([
+            `${BOLD('Next: create a brand-new ZenSync repo here.')}`,
+            '',
+            `${DIM('ZenSync will initialize a local Git repo in your chosen')}`,
+            `${DIM('folder, optionally import your current Zen profile, and')}`,
+            `${DIM('then offer to create a private GitHub repo for it.')}`,
+        ]);
+    }
+    gap();
+
+    const { confirm } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: action === 'clone'
+            ? 'Connect to an existing repo?'
+            : 'Start a brand-new repo here?',
+        default: true,
+        prefix: chalk.cyan('?')
+    }]);
+
+    return confirm ? action : null;
 }
 
-async function cloneExistingRepo(repoPath) {
+function prepareReplacement(repoPath) {
+    if (!fs.existsSync(repoPath)) return { needsReplacement: false, backupPath: null };
+    if (isDirEmpty(repoPath)) return { needsReplacement: true, backupPath: null };
+    return { needsReplacement: true, backupPath: makeBackupPath(repoPath) };
+}
+
+function replaceDirectory(repoPath, backupPath) {
+    if (!fs.existsSync(repoPath)) return null;
+    if (isDirEmpty(repoPath)) {
+        fs.rmSync(repoPath, { recursive: true, force: true });
+        return null;
+    }
+    return movePathToBackup(repoPath, backupPath);
+}
+
+function restoreReplacement(repoPath, backupPath) {
+    if (!backupPath) return;
+    if (fs.existsSync(repoPath)) return;
+    if (!fs.existsSync(backupPath)) return;
+    fs.renameSync(backupPath, repoPath);
+}
+
+async function setupRepository(repoPath, options = {}) {
+    const isGit = fs.existsSync(path.join(repoPath, '.git'));
+    const hasProfile = fs.existsSync(path.join(repoPath, 'profile'));
+    const empty = isDirEmpty(repoPath);
+
+    if (isGit && hasProfile) {
+        const origin = await getOriginUrl(repoPath);
+        card([
+            `${OK('This folder already looks like a ZenSync repo.')}`,
+            '',
+            `${DIM('Folder:')}  ${CYAN(shortPath(repoPath))}`,
+            `${DIM('Remote:')}  ${origin ? CYAN(origin) : DIM('none configured yet')}`,
+            `${DIM('Profile:')} ${profileHasData(repoPath) ? OK('has data') : WARN('empty')}`,
+            '',
+            `${DIM('You can keep it, reconnect it to a different repo,')}`,
+            `${DIM('or start over cleanly with a backup.')}`,
+        ], chalk.green);
+        gap();
+
+        const { action } = await inquirer.prompt([{
+            type: 'list',
+            name: 'action',
+            message: 'What do you want to do with this existing setup?',
+            prefix: chalk.cyan('?'),
+            choices: [
+                { name: `✅  Keep this repo and continue`, value: 'keep' },
+                { name: `📥  Replace it with a clone of my existing GitHub repo`, value: 'clone' },
+                { name: `✨  Start over with a brand-new ZenSync repo here`, value: 'create' },
+            ]
+        }]);
+
+        if (action === 'keep') return await refreshConfiguredRepo(repoPath, options);
+        if (action === 'clone') return await cloneExistingRepo(repoPath, { ...options, replaceExisting: true });
+        return await createNewRepo(repoPath, { ...options, replaceExisting: true });
+    }
+
+    if (isGit && !hasProfile) {
+        card([
+            `${WARN('This folder is already a Git repo, but not a ZenSync repo yet.')}`,
+            '',
+            `${DIM('ZenSync expects a')} ${CYAN('profile/')} ${DIM('folder here.')}`,
+            `${DIM('If this repo was created by mistake, you can safely start over.')}`,
+        ], chalk.yellow);
+        gap();
+
+        const { action } = await inquirer.prompt([{
+            type: 'list',
+            name: 'action',
+            message: 'How should ZenSync fix this folder?',
+            prefix: chalk.cyan('?'),
+            choices: [
+                { name: `📥  Replace this folder with a clone of my existing ZenSync repo`, value: 'clone' },
+                { name: `✨  Start over and turn this folder into a new ZenSync repo`, value: 'create' },
+                { name: `↩️  Cancel for now`, value: 'cancel' },
+            ]
+        }]);
+
+        if (action === 'cancel') return false;
+        if (action === 'clone') return await cloneExistingRepo(repoPath, { ...options, replaceExisting: true });
+        return await createNewRepo(repoPath, { ...options, replaceExisting: true });
+    }
+
+    if (!empty && !isGit) {
+        card([
+            `${WARN('This folder already has files in it.')}`,
+            '',
+            `${DIM('ZenSync can still use this location, but it should not mix')}`,
+            `${DIM('with unrelated files. We recommend backing it up first.')}`,
+        ], chalk.yellow);
+        gap();
+
+        const { action } = await inquirer.prompt([{
+            type: 'list',
+            name: 'action',
+            message: 'What would you like to do?',
+            prefix: chalk.cyan('?'),
+            choices: [
+                { name: `📥  Back up this folder and clone my existing ZenSync repo here`, value: 'clone' },
+                { name: `✨  Back up this folder and start a new ZenSync repo here`, value: 'create' },
+                { name: `↩️  Cancel and choose a different folder later`, value: 'cancel' },
+            ]
+        }]);
+
+        if (action === 'cancel') return false;
+        if (action === 'clone') return await cloneExistingRepo(repoPath, { ...options, replaceExisting: true });
+        return await createNewRepo(repoPath, { ...options, replaceExisting: true });
+    }
+
+    const action = await promptFreshSetupAction();
+    if (!action) return false;
+
+    if (action === 'clone') return await cloneExistingRepo(repoPath, options);
+    return await createNewRepo(repoPath, options);
+}
+
+async function cloneExistingRepo(repoPath, options = {}) {
     gap();
     card([
-        `${DIM('Paste the URL of your ZenSync repo.')}`,
-        ``,
+        `${DIM('Paste the URL of your existing ZenSync repo.')}`,
+        '',
         `${DIM('Example:')}  ${CYAN('https://github.com/you/zen-profile-data.git')}`,
         `${DIM('  or')}     ${CYAN('git@github.com:you/zen-profile-data.git')}`,
     ]);
@@ -481,49 +789,87 @@ async function cloneExistingRepo(repoPath) {
         prefix: chalk.cyan('?'),
         validate: input => {
             if (input.length < 5) return 'Please enter a valid Git URL';
-            if (!input.includes('github.com') && !input.includes('gitlab.com') && !input.includes('git@') && !input.includes('https://'))
-                return 'Hmm, that doesn\'t look like a Git URL. Double-check it!';
+            if (!input.includes('github.com') && !input.includes('gitlab.com') && !input.includes('git@') && !input.includes('https://')) {
+                return 'That does not look like a Git URL yet. Paste the full repo URL.';
+            }
             return true;
         }
     }]);
 
-    gap();
-    const s = spinner('Cloning your profile repository...');
+    const replacement = options.replaceExisting ? prepareReplacement(repoPath) : { needsReplacement: false, backupPath: null };
 
+    if (replacement.needsReplacement && !options.yes) {
+        gap();
+        card([
+            `${WARN('This will replace the current contents of your chosen folder.')}`,
+            '',
+            `${DIM('Folder:')}  ${CYAN(shortPath(repoPath))}`,
+            replacement.backupPath
+                ? `${DIM('Backup:')}  ${CYAN(shortPath(replacement.backupPath))}`
+                : `${DIM('Backup:')}  ${DIM('not needed — the folder is empty')}`,
+        ], chalk.yellow);
+        gap();
+
+        const { confirmReplace } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'confirmReplace',
+            message: 'Backup/replace this folder and clone the repo?',
+            default: false,
+            prefix: chalk.yellow('!')
+        }]);
+
+        if (!confirmReplace) return false;
+    }
+
+    gap();
+    const s = spinner(replacement.needsReplacement
+        ? 'Backing up current folder and cloning repo...'
+        : 'Cloning your profile repository...');
+
+    let movedBackupPath = null;
     try {
         const parentDir = path.dirname(repoPath);
         const dirName = path.basename(repoPath);
 
-        if (isDirEmpty(repoPath)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+        movedBackupPath = replaceDirectory(repoPath, replacement.backupPath);
+
+        if (!replacement.needsReplacement && isDirEmpty(repoPath)) {
             fs.rmSync(repoPath, { recursive: true, force: true });
         }
 
         await execa('git', ['clone', repoUrl, dirName], { cwd: parentDir });
 
-        // Verify clone worked
         if (!fs.existsSync(repoPath) || !fs.existsSync(path.join(repoPath, '.git'))) {
             s.fail('Clone failed — directory is missing after clone.');
             row('💡', DIM('Try manually: ') + CYAN(`git clone ${repoUrl} ${repoPath}`));
+            restoreReplacement(repoPath, movedBackupPath);
             return false;
         }
 
         if (profileHasData(repoPath)) {
             const count = fs.readdirSync(path.join(repoPath, 'profile')).length;
-            s.succeed(OK(`Cloned! Profile loaded with ${count} items.`));
+            s.succeed(OK(`Connected! Profile loaded with ${count} items.`));
         } else {
-            s.succeed(OK('Cloned!'));
-            row('⚠️', WARN('Heads up — the profile folder in this repo is empty.'));
-            row('  ', DIM('You may need to push profile data from another device first.'));
+            s.succeed(OK('Connected to the repo.'));
+            row('⚠️', WARN('The profile folder in this repo is empty.'));
+            row('  ', DIM('Push profile data from another device, then run setup again if needed.'));
+        }
+
+        if (movedBackupPath) {
+            row('🛟', DIM(`Previous folder backed up to ${shortPath(movedBackupPath)}`));
         }
         return true;
 
     } catch (error) {
+        restoreReplacement(repoPath, movedBackupPath);
         s.fail('Clone failed.');
         gap();
         if (error.message.includes('not found') || error.message.includes('404')) {
             row('💡', 'Repository not found. Check the URL and try again.');
         } else if (error.message.includes('Authentication') || error.message.includes('403')) {
-            row('💡', 'Access denied. Try: ' + CYAN('gh auth login'));
+            row('💡', 'Access denied. Make sure GitHub CLI or your Git credentials are set up.');
+            row('  ', CYAN('gh auth login'));
         } else {
             row('💡', DIM(error.shortMessage || error.message));
         }
@@ -531,17 +877,46 @@ async function cloneExistingRepo(repoPath) {
     }
 }
 
-async function createNewRepo(repoPath) {
-    gap();
-    const s = spinner('Initializing repository...');
+async function createNewRepo(repoPath, options = {}) {
+    const replacement = options.replaceExisting ? prepareReplacement(repoPath) : { needsReplacement: false, backupPath: null };
 
+    if (replacement.needsReplacement && !options.yes) {
+        gap();
+        card([
+            `${WARN('This will replace the current contents of your chosen folder.')}`,
+            '',
+            `${DIM('Folder:')}  ${CYAN(shortPath(repoPath))}`,
+            replacement.backupPath
+                ? `${DIM('Backup:')}  ${CYAN(shortPath(replacement.backupPath))}`
+                : `${DIM('Backup:')}  ${DIM('not needed — the folder is empty')}`,
+        ], chalk.yellow);
+        gap();
+
+        const { confirmReplace } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'confirmReplace',
+            message: 'Backup/replace this folder and start over?',
+            default: false,
+            prefix: chalk.yellow('!')
+        }]);
+
+        if (!confirmReplace) return false;
+    }
+
+    gap();
+    const s = spinner(replacement.needsReplacement
+        ? 'Backing up current folder and creating a new repo...'
+        : 'Initializing repository...');
+
+    let movedBackupPath = null;
     try {
+        movedBackupPath = replaceDirectory(repoPath, replacement.backupPath);
+
         if (!fs.existsSync(repoPath)) fs.mkdirSync(repoPath, { recursive: true });
 
         try {
             await execa('git', ['init', '-b', 'main'], { cwd: repoPath });
         } catch {
-            // Fallback for older Git versions that don't support `git init -b`
             await execa('git', ['init'], { cwd: repoPath });
             await execa('git', ['branch', '-M', 'main'], { cwd: repoPath });
         }
@@ -549,7 +924,6 @@ async function createNewRepo(repoPath) {
         const profilePath = path.join(repoPath, 'profile');
         if (!fs.existsSync(profilePath)) fs.mkdirSync(profilePath);
 
-        // .gitignore
         fs.writeFileSync(path.join(repoPath, '.gitignore'), [
             '# ZenSync — auto-generated',
             '',
@@ -601,35 +975,36 @@ async function createNewRepo(repoPath) {
             'compatibility.ini',
         ].join('\n') + '\n');
 
-        // package.json
         fs.writeFileSync(path.join(repoPath, 'package.json'), JSON.stringify({
-            name: "my-zen-profile",
-            version: "1.0.0",
-            description: "Zen Browser profile managed by ZenSync",
-            scripts: { setup: "zensync setup", sync: "zensync watch" },
+            name: 'my-zen-profile',
+            version: '1.0.0',
+            description: 'Zen Browser profile managed by ZenSync',
+            scripts: { setup: 'zensync setup', sync: 'zensync watch' },
             dependencies: {}
         }, null, 2));
 
         s.succeed('Repository initialized.');
+        if (movedBackupPath) {
+            row('🛟', DIM(`Previous folder backed up to ${shortPath(movedBackupPath)}`));
+        }
 
-        // Import local profile
         const localProfile = findLocalZenProfile();
         if (localProfile) {
             gap();
             card([
                 `🔍  ${BOLD('Found your Zen Browser profile!')}`,
-                ``,
+                '',
                 `    ${CYAN(shortPath(localProfile))}`,
-                ``,
-                `${DIM('    We can copy your bookmarks, extensions, settings')}`,
-                `${DIM('    and other data into the repo now.')}`,
+                '',
+                `${DIM('We can copy your bookmarks, extensions, settings')}`,
+                `${DIM('and other data into the repo now.')}`,
             ]);
             gap();
 
             const { importProfile } = await inquirer.prompt([{
                 type: 'confirm',
                 name: 'importProfile',
-                message: 'Import your browser data?',
+                message: 'Import your browser data into this new repo?',
                 default: true,
                 prefix: chalk.cyan('?'),
             }]);
@@ -648,61 +1023,80 @@ async function createNewRepo(repoPath) {
         } else {
             gap();
             row('ℹ️', DIM('No local Zen profile found to import.'));
-            row('  ', DIM('Open Zen Browser at least once, then re-run setup.'));
+            row('  ', DIM('Open Zen Browser at least once, then re-run setup if you want to import it.'));
         }
 
-        // Initial commit
         gap();
         const s3 = spinner('Creating initial commit...');
         await execa('git', ['add', '.'], { cwd: repoPath });
-        await execa('git', ['commit', '-m', 'Initial profile setup via ZenSync'], { cwd: repoPath });
-        s3.succeed('Initial commit created.');
+        try {
+            await execa('git', ['commit', '-m', 'Initial profile setup via ZenSync'], { cwd: repoPath });
+            s3.succeed('Initial commit created.');
+        } catch (error) {
+            s3.fail('Initial commit failed.');
+            const details = [error.stderr, error.stdout, error.shortMessage, error.message].filter(Boolean).join(' | ');
+            if (details.includes('Please tell me who you are') || details.includes('unable to auto-detect email address')) {
+                row('💡', DIM('Git needs your name/email before it can create commits.'));
+                row('  ', CYAN('git config --global user.name "Your Name"'));
+                row('  ', CYAN('git config --global user.email "you@example.com"'));
+            } else {
+                row('💡', DIM(details));
+            }
+            return false;
+        }
 
-        // GitHub
+        const gh = options.preflight?.gh || await detectGithubCliStatus();
+
         gap();
+        if (!gh.installed || !gh.authenticated) {
+            card([
+                `${WARN('Skipping automatic GitHub repo creation for now.')}`,
+                '',
+                `${DIM('Reason:')} ${DIM(!gh.installed ? 'GitHub CLI is not installed.' : 'GitHub CLI is not logged in.')}`,
+                `${DIM('When you are ready:')}`,
+                !gh.installed
+                    ? `${CYAN('brew install gh')} ${DIM('then')} ${CYAN('gh auth login')}`
+                    : `${CYAN('gh auth login')}`,
+                `${DIM('Then re-run')} ${CYAN('zensync setup')} ${DIM('or push manually.')}`,
+            ], chalk.yellow);
+            return true;
+        }
+
         card([
-            `🐙  ${BOLD('Push to GitHub?')}`,
-            ``,
-            `${DIM('    A private repository keeps your profile safe')}`,
-            `${DIM('    in the cloud and lets you sync between devices.')}`,
-            ``,
-            `${DIM('    Requires:')} ${CYAN('gh')} ${DIM('CLI (https://cli.github.com)')}`,
+            `🐙  ${BOLD('Create a private GitHub repo now?')}`,
+            '',
+            `${DIM('ZenSync detected that GitHub CLI is ready.')}`,
+            `${DIM('We can create a private repo and push this profile')}`,
+            `${DIM('so your other machines can connect to it.')}`,
         ]);
         gap();
 
         const { setupGithub } = await inquirer.prompt([{
             type: 'confirm',
             name: 'setupGithub',
-            message: 'Create a private GitHub repo?',
+            message: 'Create and push a private GitHub repo?',
             default: true,
             prefix: chalk.cyan('?'),
         }]);
 
         if (setupGithub) {
+            const { repoName } = await inquirer.prompt([{
+                type: 'input',
+                name: 'repoName',
+                message: 'Repo name:',
+                default: 'zen-profile-data',
+                prefix: chalk.cyan('?'),
+            }]);
+
+            const s4 = spinner('Creating private repository on GitHub...');
             try {
-                await execa('gh', ['--version']);
-
-                const { repoName } = await inquirer.prompt([{
-                    type: 'input',
-                    name: 'repoName',
-                    message: 'Repo name:',
-                    default: 'zen-profile-data',
-                    prefix: chalk.cyan('?'),
-                }]);
-
-                const s4 = spinner('Creating private repository on GitHub...');
                 await execa('gh', ['repo', 'create', repoName, '--private', '--source=.', '--remote=origin', '--push'], { cwd: repoPath });
-                const { stdout: user } = await execa('gh', ['api', 'user', '--jq', '.login']);
-                s4.succeed(OK(`Created: `) + CYAN(`github.com/${user}/${repoName}`));
-
+                const user = gh.user || (await execa('gh', ['api', 'user', '--jq', '.login'])).stdout.trim();
+                s4.succeed(OK('Created: ') + CYAN(`github.com/${user}/${repoName}`));
             } catch (e) {
-                if (e.message.includes('ENOENT')) {
-                    row('⚠️', WARN('GitHub CLI not found.'));
-                    row('  ', DIM('Install from: ') + CYAN('https://cli.github.com'));
-                } else {
-                    row('⚠️', WARN('GitHub setup failed: ') + DIM(e.message));
-                }
-                row('💡', DIM('No worries — you can push manually later.'));
+                s4.fail('GitHub setup failed.');
+                row('💡', DIM(e.stderr || e.shortMessage || e.message));
+                row('  ', DIM('No worries — you can push manually later.'));
             }
         }
 
@@ -719,8 +1113,7 @@ async function createNewRepo(repoPath) {
 function backupConfigFile(filePath) {
     if (!fs.existsSync(filePath)) return null;
 
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const backupPath = `${filePath}.zensync-backup-${ts}`;
+    const backupPath = `${filePath}.zensync-backup-${makeTimestamp()}`;
     fs.copyFileSync(filePath, backupPath);
     return backupPath;
 }
@@ -800,10 +1193,14 @@ async function linkProfile(repoPath) {
     if (repoProfileEmpty) {
         gap();
         card([
-            `${ERR('🚨  Profile folder is EMPTY')}`,
-            ``,
-            `${DIM('    Linking now would make Zen open an empty profile.')}`,
-            `${DIM('    Pull profile data first, or import local data.')}`,
+            `${ERR('🚨  Your repo profile folder is empty')}`,
+            '',
+            `${DIM('Linking right now would make Zen Browser point at an')}`,
+            `${DIM('empty profile folder, which is usually not what you want.')}`,
+            '',
+            `${DIM('This often means:')}`,
+            `${DIM('  • you cloned the repo before any profile data was pushed')}`,
+            `${DIM('  • or you created a new repo but skipped profile import')}`,
         ], chalk.red);
         gap();
 
@@ -817,6 +1214,7 @@ async function linkProfile(repoPath) {
 
         if (!forceLink) {
             row('🛡️', OK('Skipped — your browser data is safe.'));
+            row('  ', DIM('Import or push profile data first, then run zensync setup again.'));
             return;
         }
     }
@@ -854,34 +1252,45 @@ async function linkProfile(repoPath) {
 // ─── Main ─────────────────────────────────────────────────────────────
 
 export async function setup(options = {}) {
-    const T = 4; // total steps
+    const T = 5;
 
-    // ── Welcome ──
     gap();
     card([
-        ``,
+        '',
         `       ${chalk.bold('🧘  ZenSync  Setup  Wizard  🧘')}`,
-        ``,
+        '',
         `   ${DIM('Sync your Zen Browser profile across devices.')}`,
-        `   ${DIM('It only takes a minute.')} ✨`,
-        ``,
+        `   ${DIM('We will check Git/GitHub first, then guide you through setup.')}`,
+        '',
     ]);
+
+    step(1, T, '🧪', 'Preflight Checks');
+    const preflight = await runPreflight(options);
+    if (!preflight.ok) {
+        gap();
+        card([
+            `${WARN('Setup stopped before any files were changed.')}`,
+            '',
+            `${DIM('Fix the issue above, then run:')}`,
+            `    ${CYAN('zensync setup')}`,
+        ], chalk.yellow);
+        gap();
+        return;
+    }
 
     const safeToContinue = await ensureZenClosed(options);
     if (!safeToContinue) {
         gap();
         card([
             `${WARN('Setup paused.')}`,
-            ``,
+            '',
             `${DIM('Close Zen Browser and run:')} ${CYAN('zensync setup')}`,
         ], chalk.yellow);
         gap();
         return;
     }
 
-    // ── Step 1: Directory ──
-    step(1, T, '📁', 'Storage Location');
-
+    step(2, T, '📁', 'Storage Location');
     const repoPath = await chooseDirectory(options);
 
     if (!fs.existsSync(repoPath)) {
@@ -891,34 +1300,30 @@ export async function setup(options = {}) {
     } else {
         row('📂', `Using: ${CYAN(shortPath(repoPath))}`);
     }
+    row('📝', DIM('Selection noted. We will save it after setup succeeds.'));
 
-    config.set('repoPath', repoPath);
-    row('💾', OK('Saved!'));
-
-    // ── Step 2: Repository ──
-    step(2, T, '📦', 'Profile Repository');
-
-    const ready = await setupRepository(repoPath, options);
+    step(3, T, '📦', 'Profile Repository');
+    const ready = await setupRepository(repoPath, { ...options, preflight });
     if (!ready) {
         gap();
         card([
             `${ERR('❌  Setup could not be completed.')}`,
-            ``,
-            `${DIM('    Fix the issue above and run:')}`,
+            '',
+            `${DIM('Nothing was linked yet. Fix the issue above and run:')}`,
             `    ${CYAN('zensync setup')}`,
         ], chalk.red);
         gap();
         return;
     }
 
-    // ── Step 3: Link ──
-    step(3, T, '🔗', 'Browser Link');
+    config.set('repoPath', repoPath);
+    row('💾', OK('Saved repo path.'));
 
+    step(4, T, '🔗', 'Browser Link');
     process.chdir(repoPath);
     await linkProfile(repoPath);
 
-    // ── Step 4: Background ──
-    step(4, T, '⚙️', 'Background Sync');
+    step(5, T, '⚙️', 'Background Sync');
 
     let shouldEnableStartup = options.startup !== false;
     if (!options.yes && shouldEnableStartup) {
@@ -958,29 +1363,29 @@ export async function setup(options = {}) {
         row('⏭️', DIM('Background watcher not started.'));
     }
 
-    // ── Summary ──
     gap();
     const ok = profileHasData(repoPath);
     card(ok ? [
-        ``,
+        '',
         `   🎉  ${chalk.bold.green('All done! ZenSync is ready.')}`,
-        ``,
+        '',
         `   ${DIM('Your profile is synced and linked.')}`,
         `   ${DIM('ZenSync runs quietly in the background.')}`,
-        ``,
+        '',
     ] : [
-        ``,
-        `   ⚡  ${chalk.bold.yellow('Almost there!')}`,
-        ``,
-        `   ${DIM('Setup complete, but your profile folder is empty.')}`,
-        `   ${DIM('Push data from another device, or re-run setup.')}`,
-        ``,
+        '',
+        `   ⚡  ${chalk.bold.yellow('Setup finished, but you still need profile data.')}`,
+        '',
+        `   ${DIM('Your folder exists, but the repo profile is empty.')}`,
+        `   ${DIM('Push data from another device or run setup again to import it.')}`,
+        '',
     ], ok ? chalk.green : chalk.yellow);
 
     gap();
-    row('📂', `Data:   ${CYAN(shortPath(repoPath))}`);
-    row('🚀', `Sync:   ${CYAN('background watcher')}`);
-    row('📊', `Status: ${CYAN('zensync status')}`);
+    row('📂', `Data:    ${CYAN(shortPath(repoPath))}`);
+    row('🔁', `Setup:   ${CYAN('zensync setup')}`);
+    row('🚀', `Sync:    ${CYAN('background watcher')}`);
+    row('📊', `Status:  ${CYAN('zensync status')}`);
     gap();
     line();
     gap();

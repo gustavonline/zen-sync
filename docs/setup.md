@@ -62,12 +62,13 @@ Close Zen Browser, then run:
 zensync setup
 ```
 
-Setup configures the profile, launch-on-login, and background watcher.
+Setup starts with preflight checks for Git, GitHub CLI, and Git identity, then configures the profile, launch-on-login, and background watcher.
 
 Choose:
 
-- **Create new repo** only on the first/original machine.
-- **Clone existing repo** on every other machine.
+- **Start brand-new repo** only on the first/original machine.
+- **Connect to existing repo** on every other machine.
+- If you picked the wrong path earlier, just run `zensync setup` again — it can now back up and replace the repo folder for you.
 
 Recommended profile-data location: `~/zensync-data`.
 

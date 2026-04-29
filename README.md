@@ -42,6 +42,12 @@ NPM install after publishing:
 npm install -g @gustavonline/zen-sync
 ```
 
+If you previously installed the older alias, remove it too:
+
+```bash
+npm uninstall -g @gustavonline/zensync
+```
+
 To update a source install:
 
 ```bash
@@ -68,12 +74,14 @@ zensync restart
 zensync setup
 ```
 
-Setup configures the profile, enables launch-on-login, and starts/restarts the background watcher.
+Setup now starts with **preflight checks** for Git, GitHub CLI (`gh`), and Git identity before it changes anything.
+It then configures the profile, enables launch-on-login, and starts/restarts the background watcher.
 
 During setup:
 
-- On the first/original machine, create or use the private profile-data repo.
-- On additional machines, choose **Clone existing repository** and use the profile repo URL, e.g. `https://github.com/gustavonline/zen-profile-data.git`.
+- On the first/original machine, choose **Start brand-new repo** and optionally import your local Zen profile.
+- On additional machines, choose **Connect to existing repo** and paste the profile repo URL, e.g. `https://github.com/gustavonline/zen-profile-data.git`.
+- If you picked the wrong path earlier, just run `zensync setup` again — the wizard can now keep the current repo, replace it with a clone, or recreate it with a backup first.
 
 ZenSync points Zen directly at `~/zensync-data/profile` and then keeps that repo synced in the background.
 
