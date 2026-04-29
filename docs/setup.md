@@ -175,7 +175,6 @@ git reset --hard origin/main
 # Restore local-only sensitive data; .gitignore keeps it out of Git from now on.
 cp -a "$BACKUP"/profile/* profile/ 2>/dev/null || true
 zensync setup
-zensync restart
 ```
 
 ## Safety policy
