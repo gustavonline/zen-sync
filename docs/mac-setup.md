@@ -31,7 +31,7 @@ https://github.com/gustavonline/zen-profile-data.git
 
 ## Daily rule
 
-Do not keep Zen open on multiple machines. Close Zen on one machine before opening it on another. ZenSync pushes a `Final Sync (Closed)` commit on close and pulls while Zen is closed.
+Do not keep Zen open on multiple machines. Close Zen on one machine before opening it on another. ZenSync pushes a `Final Sync (Closed)` commit on close, creates `Live Checkpoint` commits while open as a fallback, and pulls while Zen is closed.
 
 ## Troubleshooting
 

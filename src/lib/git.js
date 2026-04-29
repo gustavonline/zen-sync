@@ -244,9 +244,40 @@ export async function gitPull(cwd) {
     }
 }
 
+function parsePorcelainPath(line) {
+    const rawPath = line.slice(3).trim();
+    if (!rawPath) return null;
+
+    const renameParts = rawPath.split(' -> ');
+    return renameParts[renameParts.length - 1].replace(/^"|"$/g, '');
+}
+
 export async function hasChanges(cwd) {
     const { stdout } = await execa('git', ['status', '--porcelain'], { cwd });
     return stdout.length > 0;
+}
+
+export async function hasChangesExcluding(cwd, ignoredPaths = []) {
+    const ignored = new Set(ignoredPaths.map(p => p.replace(/\\/g, '/')));
+    const { stdout } = await execa('git', ['status', '--porcelain'], { cwd });
+    if (!stdout.trim()) return false;
+
+    return stdout
+        .split(/\r?\n/)
+        .map(line => line.trimEnd())
+        .filter(Boolean)
+        .map(parsePorcelainPath)
+        .filter(Boolean)
+        .some(p => !ignored.has(p.replace(/\\/g, '/')));
+}
+
+export async function getHeadCommit(cwd) {
+    try {
+        const { stdout } = await execa('git', ['rev-parse', '--short', 'HEAD'], { cwd });
+        return stdout.trim() || null;
+    } catch {
+        return null;
+    }
 }
 
 export async function getCurrentBranch(cwd) {
@@ -289,14 +320,7 @@ async function getDirtyPaths(cwd) {
             .split(/\r?\n/)
             .map(line => line.trimEnd())
             .filter(Boolean)
-            .map(line => {
-                const rawPath = line.slice(3).trim();
-                if (!rawPath) return null;
-
-                // Renames: "old -> new". Keep the destination path.
-                const renameParts = rawPath.split(' -> ');
-                return renameParts[renameParts.length - 1].replace(/^"|"$/g, '');
-            })
+            .map(parsePorcelainPath)
             .filter(Boolean);
 
         return uniqueNonEmpty(paths);

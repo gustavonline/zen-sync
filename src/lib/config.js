@@ -10,7 +10,7 @@ const schema = {
 	},
     autoSyncInterval: {
         type: 'number',
-        default: 0 // 0 = Disabled, otherwise minutes
+        default: 1 // live checkpoint interval in minutes; 0 = disabled
     }
 };
 

@@ -16,7 +16,7 @@ import state from './lib/state.js';
 program
   .name('zensync')
   .description('Seamlessly sync your Zen Browser profile')
-  .version('2.1.0');
+  .version('2.2.0');
 
 // --- Setup & Config ---
 
@@ -34,7 +34,7 @@ program.command('config')
         {
             type: 'number',
             name: 'interval',
-            message: 'Auto-Sync Interval (minutes, 0 to disable):',
+            message: 'Live checkpoint interval while Zen is open (minutes, 0 to disable):',
             default: config.get('autoSyncInterval') || 0
         }
     ]);
@@ -88,7 +88,8 @@ program.command('status')
     }
 
     const interval = config.get('autoSyncInterval');
-    console.log(chalk.white(`Auto-Sync: ${interval > 0 ? interval + 'm' : 'Disabled'}`));
+    console.log(chalk.white('Final Sync: On browser close'));
+    console.log(chalk.white(`Live Checkpoints: ${interval > 0 ? interval + 'm' : 'Disabled'}`));
     console.log(chalk.white(`Repo Path: ${config.get('repoPath')}`));
   });
 

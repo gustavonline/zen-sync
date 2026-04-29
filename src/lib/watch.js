@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import psList from 'ps-list';
 import notifier from 'node-notifier';
 import config from './config.js';
@@ -7,6 +10,8 @@ import {
     gitPush,
     gitPull,
     hasChanges,
+    hasChangesExcluding,
+    getHeadCommit,
     getCurrentBranch,
     hasUnmergedPaths,
     recoverUnmergedConflictState,
@@ -18,10 +23,67 @@ import { log } from './logger.js';
 import { enforceClientVersionGate } from './clientVersionGate.js';
 import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
+const SNAPSHOT_FILE = '.zensync-snapshot.json';
+const MIN_LIVE_CHECKPOINT_INTERVAL_MS = 15 * 1000;
+
 let wasRunning = false;
 let lastIdlePullAt = 0;
+let lastLiveCheckpointAt = 0;
+let lastLiveSnapshotWarningKey = null;
 let repoIssueActive = false;
 const IDLE_PULL_INTERVAL_MS = 15 * 1000;
+
+function getMachineId() {
+    return `${os.hostname() || 'unknown'}-${process.platform}`;
+}
+
+function readSnapshotMetadata(repoPath) {
+    const snapshotPath = path.join(repoPath, SNAPSHOT_FILE);
+    if (!fs.existsSync(snapshotPath)) return null;
+
+    try {
+        return JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function writeSnapshotMetadata(repoPath, type, message) {
+    const data = {
+        type,
+        machineId: getMachineId(),
+        platform: process.platform,
+        timestamp: new Date().toISOString(),
+        message
+    };
+
+    fs.writeFileSync(path.join(repoPath, SNAPSHOT_FILE), `${JSON.stringify(data, null, 2)}\n`);
+    return data;
+}
+
+async function warnIfLatestSnapshotIsLive(repoPath) {
+    const metadata = readSnapshotMetadata(repoPath);
+    if (metadata?.type !== 'live') return;
+
+    const head = await getHeadCommit(repoPath);
+    const key = `${head || 'unknown'}:${metadata.machineId || 'unknown'}:${metadata.timestamp || ''}`;
+    if (key === lastLiveSnapshotWarningKey) return;
+
+    const source = metadata.machineId || 'another machine';
+    const msg = `Latest cloud snapshot is a LIVE checkpoint from ${source}, not a clean browser-close final. Tabs may still restore, but close Zen on the other machine next time for a final sync.`;
+
+    log(`⚠️ ${msg}`, 'warning');
+
+    if (metadata.machineId !== getMachineId()) {
+        notifier.notify({
+            title: 'ZenSync live checkpoint',
+            message: msg,
+            wait: true
+        });
+    }
+
+    lastLiveSnapshotWarningKey = key;
+}
 
 async function checkZen() {
     const list = await psList();
@@ -166,54 +228,79 @@ async function ensureClientVersionAllowed(repoPath) {
     return true;
 }
 
-async function performSync(repoPath, message, notify = true) {
+async function performSync(repoPath, message, notify = true, options = {}) {
+    const {
+        pullFirst = true,
+        snapshotType = null,
+        skipIfNoMeaningfulChanges = false
+    } = options;
+
     try {
         if (!(await ensureRepoReady(repoPath, notify))) {
             return false;
         }
 
-        // Pull first to avoid piling up local commits if remote changed.
-        const pullResult = await gitPull(repoPath);
-        if (!pullResult.success) {
-            if (isUnmergedConflictError(pullResult.error)) {
-                await ensureRepoReady(repoPath, notify);
+        if (pullFirst) {
+            // Pull first to avoid piling up local commits if remote changed.
+            const pullResult = await gitPull(repoPath);
+            if (!pullResult.success) {
+                if (isUnmergedConflictError(pullResult.error)) {
+                    await ensureRepoReady(repoPath, notify);
+                    return false;
+                }
+
+                if (isLikelyProfileLockError(pullResult.error)) {
+                    if (!lockIssueActive) {
+                        log('⚠️ Sync temporarily blocked: profile files are locked by Zen. Will retry automatically.', 'warning');
+                    }
+                    lockIssueActive = true;
+                } else {
+                    lockIssueActive = false;
+                    log(`❌ Pull failed: ${pullResult.error}`, 'error');
+                    if (notify) {
+                        notifier.notify({
+                            title: 'ZenSync',
+                            message: 'Could not pull latest cloud changes. Check logs.',
+                            wait: true
+                        });
+                    }
+                }
+
+                await ensureRepoReady(repoPath, false);
                 return false;
             }
 
-            if (isLikelyProfileLockError(pullResult.error)) {
-                if (!lockIssueActive) {
-                    log('⚠️ Sync temporarily blocked: profile files are locked by Zen. Will retry automatically.', 'warning');
-                }
-                lockIssueActive = true;
-            } else {
-                lockIssueActive = false;
-                log(`❌ Pull failed: ${pullResult.error}`, 'error');
-                if (notify) {
-                    notifier.notify({
-                        title: 'ZenSync',
-                        message: 'Could not pull latest cloud changes. Check logs.',
-                        wait: true
-                    });
-                }
+            lastIdlePullAt = Date.now();
+
+            if (pullResult.recovered && pullResult.recoveryDir) {
+                log(`🛟 Pull recovery moved conflicting untracked files to: ${pullResult.recoveryDir}`, 'warning');
             }
 
-            await ensureRepoReady(repoPath, false);
-            return false;
-        }
-
-        lastIdlePullAt = Date.now();
-
-        if (pullResult.recovered && pullResult.recoveryDir) {
-            log(`🛟 Pull recovery moved conflicting untracked files to: ${pullResult.recoveryDir}`, 'warning');
-        }
-
-        if (lockIssueActive) {
-            log('✅ Profile lock cleared. Sync resumed.', 'success');
-            lockIssueActive = false;
+            if (lockIssueActive) {
+                log('✅ Profile lock cleared. Sync resumed.', 'success');
+                lockIssueActive = false;
+            }
         }
 
         if (!(await ensureClientVersionAllowed(repoPath))) {
             return false;
+        }
+
+        const hasMeaningfulChanges = await hasChangesExcluding(repoPath, [SNAPSHOT_FILE]);
+        const currentSnapshot = readSnapshotMetadata(repoPath);
+
+        if (skipIfNoMeaningfulChanges && !hasMeaningfulChanges) {
+            log('No live checkpoint changes found.', 'info');
+            return true;
+        }
+
+        if (snapshotType === 'final' && !hasMeaningfulChanges && currentSnapshot?.type === 'final') {
+            log('No changes found.', 'info');
+            return true;
+        }
+
+        if (snapshotType) {
+            writeSnapshotMetadata(repoPath, snapshotType, message);
         }
 
         await gitAdd(repoPath);
@@ -225,11 +312,13 @@ async function performSync(repoPath, message, notify = true) {
         const commitResult = await gitCommit(repoPath, message);
         if (!commitResult.success) {
             log(`❌ Commit failed: ${commitResult.error}`, 'error');
-            notifier.notify({
-                title: 'ZenSync',
-                message: 'Hiccup! 🐸\nCommit failed. Check logs.',
-                wait: true
-            });
+            if (notify) {
+                notifier.notify({
+                    title: 'ZenSync',
+                    message: 'Hiccup! 🐸\nCommit failed. Check logs.',
+                    wait: true
+                });
+            }
             return false;
         }
 
@@ -242,11 +331,13 @@ async function performSync(repoPath, message, notify = true) {
         }
 
         log(`❌ Push failed: ${pushResult.error}`, 'error');
-        notifier.notify({
-            title: 'ZenSync',
-            message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
-            wait: true
-        });
+        if (notify) {
+            notifier.notify({
+                title: 'ZenSync',
+                message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
+                wait: true
+            });
+        }
     } catch (error) {
         log(`Sync warning: ${error.message}`, 'warning');
 
@@ -257,23 +348,30 @@ async function performSync(repoPath, message, notify = true) {
             msg = 'Cloud seems a bit foggy? ☁️\nCheck internet & try again.';
         }
 
-        notifier.notify({
-            title: 'ZenSync',
-            message: msg,
-            wait: true
-        });
+        if (notify) {
+            notifier.notify({
+                title: 'ZenSync',
+                message: msg,
+                wait: true
+            });
+        }
     }
     return false;
 }
 
 export async function watch() {
     const repoPath = config.get('repoPath') || process.cwd();
-    const autoSyncInterval = config.get('autoSyncInterval') || 0; // Legacy setting; closed-browser sync is now the safe default.
+    const liveCheckpointInterval = config.get('autoSyncInterval') ?? 1; // minutes; 0 disables live checkpoints.
+    const liveCheckpointIntervalMs = liveCheckpointInterval > 0
+        ? Math.max(MIN_LIVE_CHECKPOINT_INTERVAL_MS, liveCheckpointInterval * 60 * 1000)
+        : 0;
 
     log(`Watcher started in ${repoPath}`);
-    log('Sync mode: closed-browser final snapshots + idle pulls while Zen is closed.');
-    if (autoSyncInterval > 0) {
-        log('Live sync while Zen is open is ignored to protect tabs/session integrity.', 'warning');
+    log('Sync mode: final snapshots on browser close + safe live checkpoints while Zen is open.');
+    if (liveCheckpointIntervalMs > 0) {
+        log(`Live checkpoints enabled: every ${liveCheckpointInterval} minute(s).`);
+    } else {
+        log('Live checkpoints disabled.');
     }
 
     // Set initial state
@@ -307,6 +405,7 @@ export async function watch() {
             await ensureRepoReady(repoPath, false);
         } else {
             lastIdlePullAt = Date.now();
+            await warnIfLatestSnapshotIsLive(repoPath);
         }
     }
 
@@ -328,8 +427,22 @@ export async function watch() {
 
         if (isRunning) {
             if (!wasRunning) {
-                log('Zen Browser STARTED. Sync paused (unless Auto-Sync is on).');
+                log('Zen Browser STARTED. Final sync paused; live checkpoints active.');
                 wasRunning = true;
+                lastLiveCheckpointAt = 0;
+            }
+
+            if (liveCheckpointIntervalMs > 0) {
+                const now = Date.now();
+                if (now - lastLiveCheckpointAt >= liveCheckpointIntervalMs) {
+                    log('⏳ Running live checkpoint...');
+                    await performSync(repoPath, `Live Checkpoint: ${new Date().toLocaleString()}`, false, {
+                        pullFirst: false,
+                        snapshotType: 'live',
+                        skipIfNoMeaningfulChanges: true
+                    });
+                    lastLiveCheckpointAt = now;
+                }
             }
 
         } else {
@@ -338,7 +451,10 @@ export async function watch() {
                 // Wait for locks
                 await new Promise(r => setTimeout(r, 2000));
 
-                await performSync(repoPath, `Final Sync (Closed): ${new Date().toLocaleString()}`, true);
+                await performSync(repoPath, `Final Sync (Closed): ${new Date().toLocaleString()}`, true, {
+                    pullFirst: true,
+                    snapshotType: 'final'
+                });
                 wasRunning = false;
             }
 
@@ -350,6 +466,8 @@ export async function watch() {
 
                 if (!idlePull.success && (idlePull.error.includes('rebase') || isUnmergedConflictError(idlePull.error))) {
                     await ensureRepoReady(repoPath, false);
+                } else if (idlePull.success) {
+                    await warnIfLatestSnapshotIsLive(repoPath);
                 }
             }
         }

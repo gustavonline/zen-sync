@@ -2,7 +2,7 @@
 
 Minimal background sync for a Zen Browser profile via a private GitHub repo.
 
-ZenSync is designed for one active computer at a time: close Zen on one machine, let ZenSync push a final snapshot, then open Zen on another machine and it pulls the latest snapshot.
+ZenSync is designed for one active computer at a time: close Zen on one machine, let ZenSync push a final snapshot, then open Zen on another machine and it pulls the latest snapshot. While Zen is open, ZenSync also makes lightweight live checkpoints as a fallback if a laptop sleeps or shuts down before Zen can close cleanly.
 
 ## What syncs
 
@@ -10,6 +10,7 @@ ZenSync is designed for one active computer at a time: close Zen on one machine,
 - extensions and extension metadata
 - bookmark backups
 - closed-browser session files used to restore tabs/workspaces
+- live tab/session checkpoints while Zen is open, marked clearly as non-final
 
 ## What does **not** sync
 
@@ -66,7 +67,9 @@ ZenSync points Zen directly at `~/zensync-data/profile` and then keeps that repo
 - Do not run Zen on two machines at the same time.
 - Close Zen on the current machine before opening it on another machine.
 - ZenSync pushes a `Final Sync (Closed)` commit when Zen closes.
+- While Zen is open, ZenSync may push `Live Checkpoint` commits. They are fallback snapshots, not clean finals.
 - While Zen is closed, ZenSync pulls remote changes every few seconds so the next launch is fresh.
+- If the newest remote commit is only a live checkpoint, ZenSync logs/notifies you so you know the other machine was probably slept/shut down without closing Zen.
 
 Useful checks:
 

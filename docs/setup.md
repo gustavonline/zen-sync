@@ -7,10 +7,10 @@ This is the short operational guide for installing, updating, and recovering Zen
 ZenSync has one default behavior:
 
 1. Zen is closed: ZenSync pulls latest remote changes in the background.
-2. Zen opens: syncing pauses so profile files are not modified underneath the browser.
-3. Zen closes: ZenSync commits and pushes a final snapshot.
+2. Zen is open: ZenSync pushes safe `Live Checkpoint` commits at the configured interval. These are fallback snapshots in case the computer sleeps/shuts down before Zen closes.
+3. Zen closes: ZenSync commits and pushes a clean `Final Sync (Closed)` snapshot.
 
-This keeps tabs/workspaces in sync without uploading cookies, passwords, site storage, form data, caches, or history databases.
+Other machines can pull a live checkpoint if no final exists yet, but ZenSync logs/notifies that it was not a clean browser-close snapshot. This keeps tabs/workspaces more resilient without uploading cookies, passwords, site storage, form data, caches, or history databases.
 
 ## Install or update the tool
 
@@ -61,6 +61,8 @@ Choose:
 - **Clone existing repo** on every other machine.
 
 Recommended profile-data location: `~/zensync-data`.
+
+Daily rule: do not keep Zen open on multiple machines. Close Zen on one machine before opening it on another. If you forget and the newest remote snapshot is only a live checkpoint, ZenSync will warn you.
 
 ## Windows
 
