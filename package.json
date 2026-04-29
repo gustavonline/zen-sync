@@ -51,6 +51,6 @@
   },
   "type": "module",
   "bin": {
-    "zensync": "./src/cli.js"
+    "zensync": "src/cli.js"
   }
 }
