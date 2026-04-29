@@ -22,6 +22,8 @@ function getStartupPath() {
         return path.join(os.homedir(), 'Library', 'LaunchAgents', `${APP_NAME}.plist`);
     } else if (process.platform === 'win32') {
         return path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', WIN_SHORTCUT_NAME);
+    } else if (process.platform === 'linux') {
+        return path.join(os.homedir(), '.config', 'systemd', 'user', 'zensync.service');
     }
     return null;
 }
@@ -56,7 +58,7 @@ export async function enableStartup() {
     await cleanupLegacy();
     const startupPath = getStartupPath();
     if (!startupPath) {
-        console.log(chalk.red('Startup configuration is only supported on macOS and Windows.'));
+        console.log(chalk.red('Startup configuration is only supported on macOS, Windows, and Linux.'));
         return;
     }
 
@@ -154,6 +156,33 @@ oLink.Save
         } finally {
             if (fs.existsSync(vbsScript)) fs.unlinkSync(vbsScript);
         }
+    } else if (process.platform === 'linux') {
+        fs.mkdirSync(path.dirname(startupPath), { recursive: true });
+
+        const serviceContent = `[Unit]
+Description=ZenSync background watcher
+
+[Service]
+Type=simple
+ExecStart=${nodePath} ${targetScript} watch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`;
+
+        fs.writeFileSync(startupPath, serviceContent);
+
+        try {
+            await execa('systemctl', ['--user', 'daemon-reload']);
+            await execa('systemctl', ['--user', 'enable', '--now', 'zensync.service']);
+            console.log(chalk.green(`✅ Enabled startup! (systemd user service)`));
+            console.log(chalk.gray(`  Service: ${startupPath}`));
+        } catch (e) {
+            console.error(chalk.red('Failed to enable systemd user service:'), e.message);
+            console.log(chalk.gray('Try manually: systemctl --user enable --now zensync.service'));
+        }
     }
 }
 
@@ -165,8 +194,17 @@ export async function disableStartup() {
             try {
                 await execa('launchctl', ['unload', startupPath]);
             } catch (e) {}
+        } else if (process.platform === 'linux') {
+            try {
+                await execa('systemctl', ['--user', 'disable', '--now', 'zensync.service']);
+            } catch (e) {}
         }
         fs.unlinkSync(startupPath);
+        if (process.platform === 'linux') {
+            try {
+                await execa('systemctl', ['--user', 'daemon-reload']);
+            } catch (e) {}
+        }
         console.log(chalk.green('✅ Disabled startup.'));
     } else {
         console.log(chalk.yellow('Startup was not enabled.'));

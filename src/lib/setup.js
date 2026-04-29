@@ -9,42 +9,117 @@ import config from './config.js';
 
 // ─── Platform Helpers ─────────────────────────────────────────────────
 
-function getProfilesDir() {
+function getZenConfigDirCandidates() {
+    const home = os.homedir();
     const p = process.platform;
-    if (p === 'win32') return path.join(os.homedir(), 'AppData', 'Roaming', 'Zen', 'Profiles');
-    if (p === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'zen', 'Profiles');
-    return null;
+
+    if (p === 'win32') return [path.join(home, 'AppData', 'Roaming', 'Zen')];
+    if (p === 'darwin') return [path.join(home, 'Library', 'Application Support', 'zen')];
+    if (p === 'linux') return [
+        path.join(home, '.zen'),
+        path.join(home, '.var', 'app', 'app.zen_browser.zen', 'zen'),
+        path.join(home, '.var', 'app', 'io.github.zen_browser.zen', '.zen'),
+        path.join(home, '.var', 'app', 'io.github.zen_browser.zen', 'zen'),
+    ];
+
+    return [];
 }
 
 function getZenConfigDir() {
-    const p = process.platform;
-    if (p === 'win32') return path.join(os.homedir(), 'AppData', 'Roaming', 'Zen');
-    if (p === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'zen');
-    return null;
+    const candidates = getZenConfigDirCandidates();
+    return candidates.find(dir => fs.existsSync(path.join(dir, 'profiles.ini'))) ||
+        candidates.find(dir => fs.existsSync(dir)) ||
+        candidates[0] ||
+        null;
 }
 
-function getExpectedProfileName() {
+function getProfilesDir() {
     const zenDir = getZenConfigDir();
     if (!zenDir) return null;
-    const iniPath = path.join(zenDir, 'profiles.ini');
-    if (!fs.existsSync(iniPath)) return null;
-    const lines = fs.readFileSync(iniPath, 'utf8').split(/\r?\n/);
-    for (const line of lines) {
-        const m = line.match(/^Default=Profiles\/(.+)$/);
-        if (m) return m[1];
-    }
-    for (const line of lines) {
-        const m = line.match(/^Path=Profiles\/(.+Default \(release\).*)$/);
-        if (m) return m[1];
-    }
-    return null;
+
+    const profilesDir = path.join(zenDir, 'Profiles');
+    return fs.existsSync(profilesDir) ? profilesDir : zenDir;
 }
 
-function createSymlink(targetPath, repoProfilePath) {
-    fs.symlinkSync(repoProfilePath, targetPath, process.platform === 'win32' ? 'junction' : 'dir');
+function parseIniSections(text) {
+    const sections = [];
+    let current = { name: null, lines: [] };
+    sections.push(current);
+
+    for (const line of text.split(/\r?\n/)) {
+        const header = line.match(/^\[([^\]]+)\]$/);
+        if (header) {
+            current = { name: header[1], lines: [] };
+            sections.push(current);
+        } else {
+            current.lines.push(line);
+        }
+    }
+
+    return sections;
+}
+
+function serializeIniSections(sections) {
+    return sections.map(section => {
+        const body = section.lines.join('\n').replace(/\n+$/g, '');
+        if (!section.name) return body;
+        return `[${section.name}]${body ? `\n${body}` : ''}`;
+    }).filter(Boolean).join('\n\n') + '\n';
+}
+
+function getIniValue(section, key) {
+    const prefix = `${key}=`;
+    const line = section.lines.find(l => l.startsWith(prefix));
+    return line ? line.slice(prefix.length) : null;
+}
+
+function setIniValue(section, key, value) {
+    const prefix = `${key}=`;
+    const idx = section.lines.findIndex(l => l.startsWith(prefix));
+    if (idx >= 0) section.lines[idx] = `${key}=${value}`;
+    else section.lines.push(`${key}=${value}`);
+}
+
+function deleteIniValue(section, key) {
+    const prefix = `${key}=`;
+    section.lines = section.lines.filter(l => !l.startsWith(prefix));
+}
+
+function resolveProfilePath(zenDir, section) {
+    const profilePath = getIniValue(section, 'Path');
+    if (!profilePath) return null;
+
+    if (getIniValue(section, 'IsRelative') === '0' || path.isAbsolute(profilePath)) {
+        return path.resolve(profilePath);
+    }
+
+    return path.resolve(zenDir, profilePath.replace(/\//g, path.sep));
 }
 
 function findLocalZenProfile() {
+    const zenDir = getZenConfigDir();
+    const iniPath = zenDir ? path.join(zenDir, 'profiles.ini') : null;
+
+    if (iniPath && fs.existsSync(iniPath)) {
+        const sections = parseIniSections(fs.readFileSync(iniPath, 'utf8'));
+        const profiles = sections.filter(section => section.name?.startsWith('Profile'));
+        const preferred = [
+            ...profiles.filter(section => getIniValue(section, 'Default') === '1'),
+            ...profiles.filter(section => (getIniValue(section, 'Name') || '').includes('Default (release)')),
+            ...profiles,
+        ];
+
+        for (const section of preferred) {
+            const fp = resolveProfilePath(zenDir, section);
+            if (!fp || !fs.existsSync(fp)) continue;
+
+            try {
+                const s = fs.lstatSync(fp);
+                if (s.isDirectory() && !s.isSymbolicLink()) return fp;
+            } catch { /* skip */ }
+        }
+    }
+
     const profilesDir = getProfilesDir();
     if (!profilesDir || !fs.existsSync(profilesDir)) return null;
     for (const item of fs.readdirSync(profilesDir, { withFileTypes: true })) {
@@ -316,22 +391,25 @@ async function createNewRepo(repoPath) {
             '# ZenSync — auto-generated',
             '',
             '# Caches & Temp',
-            'cache/', 'caches/', 'startupCache/', 'thumbnails/',
+            'cache/', 'cache2/', 'caches/', 'startupCache/', 'thumbnails/',
             '*.tmp', '*.bak', '*.log',
-            '.zensync-recovery/',
+            '.zensync-recovery/', 'jumpListCache/',
             '',
             '# Lock Files',
             'lock', '.parentlock', 'parent.lock',
             '',
-            '# Storage & Telemetry (too large for git)',
+            '# Sensitive / bulky local site data (never sync)',
             'storage/', 'safebrowsing/', 'datareporting/',
             'saved-telemetry-pings/', 'crashes/', 'minidumps/', 'shader-cache/',
+            'cookies.sqlite', 'places.sqlite', 'favicons.sqlite', 'formhistory.sqlite',
+            'storage.sqlite', 'webappsstore.sqlite', 'tabnotes.sqlite',
+            'autofill-profiles.json', 'activity-stream.*.json', 'targeting.snapshot.json',
             '',
-            '# Media Plugins (downloaded binaries)',
-            'gmp-gmpopenh264/', 'gmp-widevinecdm/',
+            '# Media plugins / DRM state (downloaded or machine-specific)',
+            'gmp/', 'gmp-gmpopenh264/', 'gmp-widevinecdm/',
             '',
             '# SQLite Temp Files',
-            '*.sqlite-wal', '*.sqlite-shm', '*.db-wal', '*.db-shm',
+            '*.sqlite-wal', '*.sqlite-shm', '*.sqlite-journal', '*.db-wal', '*.db-shm',
             '',
             '# Window State',
             'xulstore.json',
@@ -348,13 +426,11 @@ async function createNewRepo(repoPath) {
             '# OS',
             '.DS_Store', 'Thumbs.db', 'node_modules/',
             '',
-            '# Session & History (handled by Firefox Sync)',
-            'sessionstore.jsonlz4', 'cookies.sqlite', 'places.sqlite', 'favicons.sqlite',
+            '# ZenSync intentionally DOES sync closed-browser session files so tabs restore across devices:',
+            '# sessionstore.jsonlz4, sessionCheckpoints.json, sessionstore-backups/, zen-sessions*.jsonlz4',
             '',
-            '# Highly-volatile session snapshots (major conflict source)',
-            'sessionstore-backups/',
-            'zen-sessions.jsonlz4',
-            'zen-sessions-backup/',
+            '# Session restore diagnostics',
+            'sessionstore-logs/',
             '',
             '# Machine / network runtime state (not useful to sync)',
             'AlternateServices.bin',
@@ -477,197 +553,139 @@ async function createNewRepo(repoPath) {
 
 // ─── Phase 3: Profile Linking ─────────────────────────────────────────
 
-async function linkProfile(repoPath) {
-    const platform = process.platform;
-    const profilesDir = getProfilesDir();
-    const repoProfilePath = path.join(repoPath, 'profile');
+function backupConfigFile(filePath) {
+    if (!fs.existsSync(filePath)) return null;
 
-    if (!profilesDir) {
-        row('⚠️', WARN('Profile linking is not supported on this platform yet.'));
-        return;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupPath = `${filePath}.zensync-backup-${ts}`;
+    fs.copyFileSync(filePath, backupPath);
+    return backupPath;
+}
+
+function upsertDefaultProfileInIni(iniPath, repoProfilePath) {
+    const sections = fs.existsSync(iniPath)
+        ? parseIniSections(fs.readFileSync(iniPath, 'utf8'))
+        : [{ name: null, lines: [] }];
+
+    let profileSections = sections.filter(section => section.name?.startsWith('Profile'));
+    let defaultProfile = profileSections.find(section => getIniValue(section, 'Default') === '1') ||
+        profileSections.find(section => (getIniValue(section, 'Name') || '').includes('Default (release)')) ||
+        profileSections.find(section => (getIniValue(section, 'Path') || '').includes('Default (release)')) ||
+        profileSections[0];
+
+    if (!defaultProfile) {
+        const profileNumbers = profileSections
+            .map(section => Number.parseInt(section.name.replace('Profile', ''), 10))
+            .filter(Number.isFinite);
+        const next = profileNumbers.length ? Math.max(...profileNumbers) + 1 : 0;
+        defaultProfile = { name: `Profile${next}`, lines: [] };
+        sections.push(defaultProfile);
+        profileSections = sections.filter(section => section.name?.startsWith('Profile'));
     }
 
-    if (!fs.existsSync(profilesDir)) {
+    for (const section of profileSections) {
+        if (section !== defaultProfile) deleteIniValue(section, 'Default');
+    }
+
+    setIniValue(defaultProfile, 'Name', getIniValue(defaultProfile, 'Name') || 'Default (release)');
+    setIniValue(defaultProfile, 'IsRelative', '0');
+    setIniValue(defaultProfile, 'Path', repoProfilePath);
+    setIniValue(defaultProfile, 'Default', '1');
+
+    for (const section of sections.filter(section => section.name?.startsWith('Install'))) {
+        setIniValue(section, 'Default', repoProfilePath);
+        setIniValue(section, 'Locked', '1');
+    }
+
+    const general = sections.find(section => section.name === 'General');
+    if (general) {
+        setIniValue(general, 'StartWithLastProfile', '1');
+        setIniValue(general, 'Version', getIniValue(general, 'Version') || '2');
+    }
+
+    fs.writeFileSync(iniPath, serializeIniSections(sections));
+}
+
+function upsertDefaultProfileInInstallsIni(iniPath, repoProfilePath) {
+    if (!fs.existsSync(iniPath)) return false;
+
+    const sections = parseIniSections(fs.readFileSync(iniPath, 'utf8'));
+    for (const section of sections.filter(section => section.name)) {
+        setIniValue(section, 'Default', repoProfilePath);
+        setIniValue(section, 'Locked', '1');
+    }
+
+    fs.writeFileSync(iniPath, serializeIniSections(sections));
+    return true;
+}
+
+async function linkProfile(repoPath) {
+    const zenDir = getZenConfigDir();
+    const repoProfilePath = path.resolve(repoPath, 'profile');
+
+    if (!zenDir || !fs.existsSync(zenDir)) {
         card([
             `${WARN('⚠️  Zen Browser not found')}`,
             ``,
-            `${DIM('    We couldn\'t find the Profiles directory.')}`,
-            `${DIM('    Open Zen Browser at least once, then re-run setup.')}`,
+            `${DIM('    Open Zen Browser once, then re-run setup.')}`,
+            `${DIM('    ZenSync needs profiles.ini to point Zen at the repo.')}`,
         ], chalk.yellow);
         return;
     }
 
-    // Safety: warn if repo profile is empty
     const repoProfileEmpty = !fs.existsSync(repoProfilePath) || fs.readdirSync(repoProfilePath).length === 0;
-
     if (repoProfileEmpty) {
         gap();
         card([
             `${ERR('🚨  Profile folder is EMPTY')}`,
             ``,
-            `${DIM('    Linking now would replace your browser data')}`,
-            `${DIM('    with an empty folder — that\'s probably not')}`,
-            `${DIM('    what you want.')}`,
-            ``,
-            `${DIM('    This usually means the clone didn\'t include')}`,
-            `${DIM('    any profile data yet.')}`,
+            `${DIM('    Linking now would make Zen open an empty profile.')}`,
+            `${DIM('    Pull profile data first, or import local data.')}`,
         ], chalk.red);
         gap();
 
         const { forceLink } = await inquirer.prompt([{
             type: 'confirm',
             name: 'forceLink',
-            message: 'Link the empty profile anyway?',
+            message: 'Point Zen at the empty profile anyway?',
             default: false,
             prefix: chalk.red('!')
         }]);
 
         if (!forceLink) {
-            row('🛡️', OK('Good call — your browser data is safe.'));
-            row('  ', DIM('Import or push profile data first, then re-run setup.'));
+            row('🛡️', OK('Skipped — your browser data is safe.'));
             return;
         }
     }
 
-    const items = fs.readdirSync(profilesDir, { withFileTypes: true });
+    const profilesIni = path.join(zenDir, 'profiles.ini');
+    const installsIni = path.join(zenDir, 'installs.ini');
 
-    // ── Case 1: Symlink already exists ──
-    for (const item of items) {
-        const fullPath = path.join(profilesDir, item.name);
-        let stat;
-        try { stat = fs.lstatSync(fullPath); } catch { continue; }
-
-        if (stat.isSymbolicLink() && (item.name.endsWith('Default (release)') || item.name.endsWith('.default-release'))) {
-            try {
-                const target = fs.readlinkSync(fullPath);
-                if (path.resolve(target) === path.resolve(repoProfilePath)) {
-                    row('✅', OK('Already linked to this repo!'));
-                    row('  ', DIM(`${shortPath(fullPath)} → ${shortPath(repoProfilePath)}`));
-                    return;
-                } else {
-                    card([
-                        `${WARN('🔗  Profile is linked elsewhere')}`,
-                        ``,
-                        `${DIM('    Current:')}  ${CYAN(shortPath(target))}`,
-                        `${DIM('    New:')}      ${CYAN(shortPath(repoProfilePath))}`,
-                    ], chalk.yellow);
-                    gap();
-
-                    const { relink } = await inquirer.prompt([{
-                        type: 'confirm',
-                        name: 'relink',
-                        message: 'Update the link to this repo?',
-                        default: true,
-                        prefix: chalk.cyan('?'),
-                    }]);
-
-                    if (relink) {
-                        if (platform === 'win32') fs.rmdirSync(fullPath);
-                        else fs.unlinkSync(fullPath);
-                        createSymlink(fullPath, repoProfilePath);
-                        row('✅', OK('Link updated!'));
-                    }
-                    return;
-                }
-            } catch { /* broken link — Case 3 */ }
-        }
-    }
-
-    // ── Case 2: Real profile directory → backup & link ──
-    const targetProfile = items.find(item => {
-        try {
-            const s = fs.lstatSync(path.join(profilesDir, item.name));
-            return s.isDirectory() && !s.isSymbolicLink() &&
-                (item.name.endsWith('Default (release)') || item.name.endsWith('.default-release'));
-        } catch { return false; }
-    });
-
-    if (targetProfile) {
-        const targetPath = path.join(profilesDir, targetProfile.name);
-
+    if (!fs.existsSync(profilesIni)) {
         card([
-            `🔍  ${BOLD('Found your Zen profile')}`,
+            `${WARN('⚠️  profiles.ini not found')}`,
             ``,
-            `    ${CYAN(targetProfile.name)}`,
-            ``,
-            `${DIM('    Here\'s what happens next:')}`,
-            ``,
-            `    ${OK('1.')} ${DIM('Your current profile is backed up  (nothing lost!)')}`,
-            `    ${OK('2.')} ${DIM('A symlink connects Zen to your repo')}`,
-            `    ${OK('3.')} ${DIM('Zen Browser uses the synced profile')}`,
-        ]);
-        gap();
-
-        const { confirmLink } = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'confirmLink',
-            message: 'Backup & link now?',
-            default: true,
-            prefix: chalk.cyan('?'),
-        }]);
-
-        if (!confirmLink) {
-            row('⏭️', DIM('Skipped. You can link later with: ') + CYAN('zensync setup'));
-            return;
-        }
-
-        const s = spinner('Backing up and linking...');
-        try {
-            const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            const backupName = `backup_${targetProfile.name}_${ts}`;
-            const backupPath = path.join(profilesDir, backupName);
-
-            fs.renameSync(targetPath, backupPath);
-            createSymlink(targetPath, repoProfilePath);
-
-            s.succeed(OK('Profile linked!'));
-            row('🛡️', DIM(`Backup: ${shortPath(backupPath)}`));
-        } catch (error) {
-            s.fail('Link failed: ' + error.message);
-            if (platform === 'win32') row('💡', WARN('Try running as Administrator.'));
-        }
+            `${DIM('    Open Zen Browser once, close it, then re-run setup.')}`,
+        ], chalk.yellow);
         return;
     }
 
-    // ── Case 3: Missing profile → create link ──
-    const expectedName = getExpectedProfileName();
-    if (expectedName) {
-        const expectedPath = path.join(profilesDir, expectedName);
-        if (!fs.existsSync(expectedPath)) {
-            card([
-                `${WARN('⚠️  Expected profile is missing')}`,
-                ``,
-                `${DIM('    Zen Browser expects:')}  ${CYAN(expectedName)}`,
-                `${DIM('    But it\'s not there — probably a broken link.')}`,
-                ``,
-                `${DIM('    We can create a fresh link to your repo.')}`,
-            ], chalk.yellow);
-            gap();
+    const s = spinner('Pointing Zen Browser at the synced profile...');
+    try {
+        const profileBackup = backupConfigFile(profilesIni);
+        const installsBackup = backupConfigFile(installsIni);
 
-            const { createLink } = await inquirer.prompt([{
-                type: 'confirm',
-                name: 'createLink',
-                message: 'Create the link?',
-                default: true,
-                prefix: chalk.cyan('?'),
-            }]);
+        upsertDefaultProfileInIni(profilesIni, repoProfilePath);
+        upsertDefaultProfileInInstallsIni(installsIni, repoProfilePath);
 
-            if (createLink) {
-                try {
-                    createSymlink(expectedPath, repoProfilePath);
-                    row('✅', OK('Link created!'));
-                    row('  ', DIM(`${expectedName} → ${shortPath(repoProfilePath)}`));
-                } catch (error) {
-                    row('❌', ERR('Failed: ') + error.message);
-                    if (process.platform === 'win32') row('💡', WARN('Try running as Administrator.'));
-                }
-            }
-            return;
+        s.succeed(OK('Zen now uses the synced profile directly.'));
+        row('📂', DIM(`Profile: ${shortPath(repoProfilePath)}`));
+        if (profileBackup || installsBackup) {
+            row('🛡️', DIM('Backed up Zen profile config before editing.'));
         }
+    } catch (error) {
+        s.fail('Failed to update Zen profile config: ' + error.message);
     }
-
-    row('⚠️', WARN('No Zen profile found to link.'));
-    row('  ', DIM('Open Zen Browser once to create a profile, then re-run setup.'));
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────

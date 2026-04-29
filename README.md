@@ -1,68 +1,84 @@
 # ZenSync
 
-Seamlessly sync your Zen Browser profile between macOS and Windows using GitHub.
+Minimal background sync for a Zen Browser profile via a private GitHub repo.
 
-## Features
-- **Cross-Platform:** Syncs your profile between macOS and Windows.
-- **Separate Data:** Keeps your sensitive profile data in a private repository, separate from the CLI tool.
-- **Easy Setup:** Interactive wizard to clone an existing profile or create a new one from your current browser data.
-- **Automatic Sync:** Runs in the background to keep devices in sync.
+ZenSync is designed for one active computer at a time: close Zen on one machine, let ZenSync push a final snapshot, then open Zen on another machine and it pulls the latest snapshot.
 
-## Installation
+## What syncs
 
-```bash
-npm install -g zensync
-```
+- Zen settings and UI customizations
+- extensions and extension metadata
+- bookmark backups
+- closed-browser session files used to restore tabs/workspaces
 
-## Quick Start
+## What does **not** sync
 
-1.  **Install & Setup:**
-    ```bash
-    npm install -g zensync
-    zensync setup
-    ```
-2.  **Follow the Wizard:**
-    - The wizard will ask where to store your profile data (e.g., `~/zensync-data`).
-    - If you are on a **new machine**, choose **"Clone existing repository"** and provide your GitHub URL.
-    - If this is your **first time**, choose **"Create a new repository"**. It will import your browser data and create a private GitHub repo for you.
+ZenSync intentionally excludes sensitive or high-conflict data:
 
-3.  **Start Syncing:**
-    ```bash
-    zensync watch
-    ```
+- passwords and encryption keys (`logins*`, `key4.db`, `cert9.db`)
+- cookies / login sessions (`cookies.sqlite`)
+- site storage (`storage/`)
+- browsing history database (`places.sqlite`)
+- form/autofill data
+- caches, locks, telemetry, crash reports, DRM/media plugin state
 
-## Branch Naming
+Note: synced tab/session files can still contain page URLs and tab titles. Keep the profile repo private.
 
-ZenSync uses `main` as the default branch for profile repositories.
-
-If you have an older profile repo that still uses `master`, rename it:
+## Install / update ZenSync
 
 ```bash
-git branch -m master main
-git push -u origin main
+git clone https://github.com/gustavonline/zen-sync.git ~/zen-sync
+cd ~/zen-sync
+npm install
+npm link
 ```
 
-## Development
+To update later:
 
-If you want to contribute to ZenSync or develop features:
+```bash
+cd ~/zen-sync
+git pull --rebase
+npm install
+npm link
+zensync restart
+```
 
-1.  Clone this repository:
-    ```bash
-    git clone https://github.com/gustavonline/zen-sync.git
-    cd zen-sync
-    ```
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
-3.  Link the package globally:
-    ```bash
-    npm link
-    ```
-    This makes the `zensync` command point to your local source code.
+## First setup on any machine
 
-4.  Test with a separate profile repository (e.g., `../zen-profile-data`) by running `zensync` commands there.
+1. Open Zen Browser once, then close it.
+2. Run:
 
-## Setup Guides
+```bash
+zensync setup
+zensync startup
+zensync start
+```
 
-- macOS setup (new machine): [`docs/mac-setup.md`](docs/mac-setup.md)
+During setup:
+
+- On the first/original machine, create or use the private profile-data repo.
+- On additional machines, choose **Clone existing repository** and use the profile repo URL, e.g. `https://github.com/gustavonline/zen-profile-data.git`.
+
+ZenSync points Zen directly at `~/zensync-data/profile` and then keeps that repo synced in the background.
+
+## Daily use
+
+- Do not run Zen on two machines at the same time.
+- Close Zen on the current machine before opening it on another machine.
+- ZenSync pushes a `Final Sync (Closed)` commit when Zen closes.
+- While Zen is closed, ZenSync pulls remote changes every few seconds so the next launch is fresh.
+
+Useful checks:
+
+```bash
+zensync status
+zensync logs -n 30
+```
+
+## Platform notes
+
+- **Windows:** startup uses a hidden Startup-folder shortcut.
+- **macOS:** startup uses a LaunchAgent.
+- **Linux:** startup uses a systemd user service. Native Zen uses `~/.zen`; Flatpak profiles are detected under `~/.var/app/...`.
+
+More details: [`docs/setup.md`](docs/setup.md).

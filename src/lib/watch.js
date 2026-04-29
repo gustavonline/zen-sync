@@ -19,10 +19,9 @@ import { enforceClientVersionGate } from './clientVersionGate.js';
 import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 let wasRunning = false;
-let lastSyncTime = Date.now();
 let lastIdlePullAt = 0;
 let repoIssueActive = false;
-const IDLE_PULL_INTERVAL_MS = 60 * 1000;
+const IDLE_PULL_INTERVAL_MS = 15 * 1000;
 
 async function checkZen() {
     const list = await psList();
@@ -269,13 +268,12 @@ async function performSync(repoPath, message, notify = true) {
 
 export async function watch() {
     const repoPath = config.get('repoPath') || process.cwd();
-    const autoSyncInterval = config.get('autoSyncInterval') || 0; // Minutes
+    const autoSyncInterval = config.get('autoSyncInterval') || 0; // Legacy setting; closed-browser sync is now the safe default.
 
     log(`Watcher started in ${repoPath}`);
+    log('Sync mode: closed-browser final snapshots + idle pulls while Zen is closed.');
     if (autoSyncInterval > 0) {
-        log(`🔄 Auto-Sync enabled: Every ${autoSyncInterval} minutes.`);
-    } else {
-        log('Auto-Sync disabled (Syncs on close only).');
+        log('Live sync while Zen is open is ignored to protect tabs/session integrity.', 'warning');
     }
 
     // Set initial state
@@ -334,27 +332,14 @@ export async function watch() {
                 wasRunning = true;
             }
 
-            // Continuous Sync Logic
-            if (autoSyncInterval > 0) {
-                const now = Date.now();
-                const diffMinutes = (now - lastSyncTime) / 1000 / 60;
-
-                if (diffMinutes >= autoSyncInterval) {
-                    log(`⏳ Running Auto-Sync (${autoSyncInterval}m interval)...`);
-                    await performSync(repoPath, `Auto-Sync (Live): ${new Date().toLocaleString()}`, false);
-                    lastSyncTime = now;
-                }
-            }
-
         } else {
             if (wasRunning) {
                 log('Zen Browser CLOSED. Syncing...');
                 // Wait for locks
                 await new Promise(r => setTimeout(r, 2000));
 
-                await performSync(repoPath, `Auto-Sync: ${new Date().toLocaleString()}`, true);
+                await performSync(repoPath, `Final Sync (Closed): ${new Date().toLocaleString()}`, true);
                 wasRunning = false;
-                lastSyncTime = Date.now();
             }
 
             // Idle pull (throttled)

@@ -1,56 +1,36 @@
-# ==========================================
-# Zen Sync - Windows Installer
-# ==========================================
-
+# ZenSync Windows installer/updater
 $ErrorActionPreference = "Stop"
-$ZenSyncDir = "$HOME\zen-sync"
-$ZenProfilePath = "$env:APPDATA\Zen\Profiles"
-$StartupFolder = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-$ShortcutPath = "$StartupFolder\ZenSync.lnk"
 
-Write-Host "Zen Sync Setup (Windows)" -ForegroundColor Cyan
-Write-Host "----------------------------"
+$RepoDir = Join-Path $HOME "zen-sync"
+$RepoUrl = "https://github.com/gustavonline/zen-sync.git"
 
-# 1. Profile Linking
-if (Test-Path $ZenProfilePath) {
-    # Find default profile
-    $Profiles = Get-ChildItem -Path $ZenProfilePath -Directory | Where-Object { $_.LinkType -ne "Junction" -and $_.Name -match "Default \(release\)" }
-    
-    if ($Profiles.Count -gt 0) {
-        $Target = $Profiles[0]
-        Write-Host "Found Profile: $($Target.Name)"
-        
-        $Backup = "backup_$($Target.Name)"
-        Write-Host "Backing up and linking..."
-        
-        Rename-Item -Path $Target.FullName -NewName $Backup
-        New-Item -ItemType Junction -Path $Target.FullName -Target "$ZenSyncDir\profile" | Out-Null
-        Write-Host "Profile linked!" -ForegroundColor Green
-    } else {
-        # Check if already done
-        $Junctions = Get-ChildItem -Path $ZenProfilePath -Directory | Where-Object { $_.LinkType -eq "Junction" }
-        if ($Junctions) {
-            Write-Host "Profile is already linked." -ForegroundColor Green
-        } else {
-            Write-Host "No suitable profile found to link." -ForegroundColor Yellow
-        }
-    }
+Write-Host "ZenSync Windows setup" -ForegroundColor Cyan
+
+if (-not (Test-Path $RepoDir)) {
+    git clone $RepoUrl $RepoDir
 }
 
-# 2. Install Background Watcher (Startup Shortcut)
-Write-Host "Installing Startup Task..."
+Set-Location $RepoDir
+git pull --rebase
+npm install
 
-$WshShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-# We use wscript to run the VBS wrapper which runs PowerShell hidden
-$Shortcut.TargetPath = "wscript.exe"
-$Shortcut.Arguments = "`"$ZenSyncDir\scripts\start-watcher-win.vbs`""
-$Shortcut.WorkingDirectory = "$ZenSyncDir"
-$Shortcut.Description = "Zen Browser Background Sync"
-$Shortcut.Save()
+# Avoid npm-link junction issues on some Windows installs by writing tiny command shims.
+$NpmPrefix = (npm config get prefix).Trim()
+$Cli = Join-Path $RepoDir "src\cli.js"
 
-Write-Host "Startup task created!" -ForegroundColor Green
-Write-Host ""
-Write-Host "Installation Complete!"
-Write-Host "Run the 'ZenSync' shortcut in your Startup folder once to start it now,"
-Write-Host "or just restart your computer."
+Set-Content -Path (Join-Path $NpmPrefix "zensync.cmd") -Value @"
+@ECHO OFF
+node "$Cli" %*
+"@ -Encoding ASCII
+
+Set-Content -Path (Join-Path $NpmPrefix "zensync.ps1") -Value @"
+& node "$Cli" @args
+"@ -Encoding UTF8
+
+Write-Host "ZenSync command installed." -ForegroundColor Green
+Write-Host "Now running setup/startup/start..." -ForegroundColor Cyan
+
+node $Cli setup
+node $Cli startup
+node $Cli start
+node $Cli status
