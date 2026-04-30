@@ -16,7 +16,7 @@ import state from './lib/state.js';
 program
   .name('zensync')
   .description('Seamlessly sync your Zen Browser profile')
-  .version('2.4.0');
+  .version('2.4.1');
 
 // --- Setup & Config ---
 

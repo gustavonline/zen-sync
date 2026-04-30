@@ -491,8 +491,7 @@ async function runPreflight(options = {}) {
 // ─── Phase 1: Welcome & Directory ─────────────────────────────────────
 
 async function chooseDirectory(options) {
-    const savedPath = config.get('repoPath');
-    const defaultPath = savedPath || path.join(os.homedir(), 'zensync-data');
+    const defaultPath = path.join(os.homedir(), 'zensync-data');
     if (options.yes) return defaultPath;
 
     const cwd = process.cwd();
@@ -599,60 +598,38 @@ async function promptFreshSetupAction() {
     card([
         BOLD('Pick the path that matches this machine:'),
         '',
-        `${DIM('You do not need to type')} ${BOLD('clone')} ${DIM('or')} ${BOLD('create')}${DIM('.')}`,
-        `${DIM('Just select one option below and press Enter.')}`,
+        `${DIM('Answer')} ${BOLD('Yes')} ${DIM('if this machine should create a new profile repo.')}`,
+        `${DIM('Answer')} ${BOLD('No')} ${DIM('if you already have a repo and want to connect to it.')}`,
         '',
-        `📥  ${CYAN('Connect to an existing ZenSync repo')}`,
-        `${DIM('    Use this on a new machine when your profile repo')}`,
-        `${DIM('    already exists on GitHub.')}`,
-        '',
-        `✨  ${CYAN('Start a brand-new ZenSync repo')}`,
-        `${DIM('    Use this on your first machine, or when you want')}`,
-        `${DIM('    to throw away the current setup and start over.')}`,
+        `✨  ${CYAN('Yes  → Start a brand-new ZenSync repo')}`,
+        `📥  ${CYAN('No   → Connect to an existing ZenSync repo')}`,
     ]);
     gap();
 
-    const { action } = await inquirer.prompt([{
-        type: 'list',
-        name: 'action',
-        message: 'What do you want to do?',
-        prefix: chalk.cyan('?'),
-        choices: [
-            { name: `📥  Connect to existing repo  ${DIM('— I already have a GitHub repo')}`, value: 'clone' },
-            { name: `✨  Start brand-new repo     ${DIM('— This is my first machine / I want to start over')}`, value: 'create' }
-        ]
-    }]);
-
-    gap();
-    if (action === 'clone') {
-        card([
-            `${BOLD('Next: connect this machine to your existing repo.')}`,
-            '',
-            `${DIM('You will paste the Git URL on the next screen.')}`,
-            `${DIM('ZenSync will clone that repo into your chosen folder.')}`,
-        ]);
-    } else {
-        card([
-            `${BOLD('Next: create a brand-new ZenSync repo here.')}`,
-            '',
-            `${DIM('ZenSync will initialize a local Git repo in your chosen')}`,
-            `${DIM('folder, optionally import your current Zen profile, and')}`,
-            `${DIM('then offer to create a private GitHub repo for it.')}`,
-        ]);
-    }
-    gap();
-
-    const { confirm } = await inquirer.prompt([{
+    const { createNew } = await inquirer.prompt([{
         type: 'confirm',
-        name: 'confirm',
-        message: action === 'clone'
-            ? 'Connect to an existing repo?'
-            : 'Start a brand-new repo here?',
-        default: true,
+        name: 'createNew',
+        message: 'Start a brand-new ZenSync repo on this machine?',
+        default: false,
         prefix: chalk.cyan('?')
     }]);
 
-    return confirm ? action : null;
+    gap();
+    if (!createNew) {
+        card([
+            `${BOLD('Great — we will connect to your existing repo next.')}`,
+            '',
+            `${DIM('Have your Git URL ready (GitHub/GitLab URL).')}`,
+        ]);
+        return 'clone';
+    }
+
+    card([
+        `${BOLD('Great — we will create a brand-new repo in your chosen folder.')}`,
+        '',
+        `${DIM('ZenSync can import your local Zen profile after repo creation.')}`,
+    ]);
+    return 'create';
 }
 
 function prepareReplacement(repoPath) {
