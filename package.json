@@ -1,10 +1,10 @@
 {
   "name": "@gustavonline/zen-sync",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Minimal background sync for Zen Browser profiles across macOS, Windows, and Linux.",
   "main": "./src/cli.js",
   "scripts": {
-    "test": "node --check src/cli.js && node --check src/lib/clientVersionGate.js && node --check src/lib/config.js && node --check src/lib/daemon.js && node --check src/lib/git.js && node --check src/lib/logger.js && node --check src/lib/setup.js && node --check src/lib/startup.js && node --check src/lib/state.js && node --check src/lib/watch.js",
+    "test": "node --check src/cli.js && node --check src/lib/clientVersionGate.js && node --check src/lib/config.js && node --check src/lib/daemon.js && node --check src/lib/git.js && node --check src/lib/logger.js && node --check src/lib/setup.js && node --check src/lib/startup.js && node --check src/lib/state.js && node --check src/lib/update.js && node --check src/lib/watch.js",
     "prepack": "npm test"
   },
   "repository": {

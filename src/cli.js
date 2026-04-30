@@ -10,13 +10,14 @@ import { watch } from './lib/watch.js';
 import { startDaemon, stopDaemon, getDaemonStatus } from './lib/daemon.js';
 import { enableStartup, disableStartup } from './lib/startup.js';
 import { readLogs, getLogPath, clearLogs } from './lib/logger.js';
+import { readCurrentVersion, runSelfUpdate } from './lib/update.js';
 import config from './lib/config.js';
 import state from './lib/state.js';
 
 program
   .name('zensync')
   .description('Seamlessly sync your Zen Browser profile')
-  .version('2.4.1');
+  .version(readCurrentVersion());
 
 // --- Setup & Config ---
 
@@ -96,6 +97,14 @@ program.command('status')
   });
 
 // --- Utils ---
+
+program.command('update')
+  .description('Update ZenSync via npm')
+  .option('-c, --check', 'Only check for updates')
+  .option('-f, --force', 'Reinstall even if ZenSync is already current')
+  .action(async (options) => {
+    await runSelfUpdate({ checkOnly: options.check, force: options.force });
+  });
 
 program.command('logs')
   .description('View recent logs')

@@ -36,7 +36,7 @@ npm install
 npm link
 ```
 
-NPM install after publishing:
+NPM install:
 
 ```bash
 npm install -g @gustavonline/zen-sync
@@ -58,12 +58,20 @@ npm link
 zensync restart
 ```
 
-To update an npm install after publishing:
+To update an npm install:
 
 ```bash
-npm update -g @gustavonline/zen-sync
+zensync update
+```
+
+Manual equivalent:
+
+```bash
+npm install -g @gustavonline/zen-sync
 zensync restart
 ```
+
+The background watcher checks for new npm versions and notifies you with the update command.
 
 ## First setup on any machine
 

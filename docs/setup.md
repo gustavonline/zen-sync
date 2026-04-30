@@ -25,14 +25,22 @@ zensync restart
 zensync status
 ```
 
-NPM install/update after publishing:
+NPM install/update:
 
 ```bash
 npm install -g @gustavonline/zen-sync
 # later:
-npm update -g @gustavonline/zen-sync
+zensync update
+```
+
+Manual update equivalent:
+
+```bash
+npm install -g @gustavonline/zen-sync
 zensync restart
 ```
+
+ZenSync checks for newer npm releases in the background and notifies you with the exact update command.
 
 On Windows PowerShell, use:
 

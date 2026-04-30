@@ -21,6 +21,7 @@ import {
 } from './git.js';
 import { log } from './logger.js';
 import { enforceClientVersionGate } from './clientVersionGate.js';
+import { notifyIfUpdateAvailable } from './update.js';
 import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 const SNAPSHOT_FILE = '.zensync-snapshot.json';
@@ -190,6 +191,14 @@ let lockIssueActive = false;
 let versionGateIssueActive = false;
 let lastVersionGateNotifyAt = 0;
 const VERSION_GATE_NOTIFY_COOLDOWN_MS = 10 * 60 * 1000;
+
+async function checkForToolUpdateQuietly() {
+    try {
+        await notifyIfUpdateAvailable();
+    } catch (error) {
+        log(`⚠️ Could not check for ZenSync updates: ${error.message}`, 'warning');
+    }
+}
 
 async function ensureClientVersionAllowed(repoPath) {
     const versionGate = await enforceClientVersionGate(repoPath);
@@ -393,6 +402,8 @@ export async function watch() {
         clearProcessState();
     });
 
+    await checkForToolUpdateQuietly();
+
     // Initial pull (skip while Zen is running to avoid lock/conflict storms)
     const zenRunningAtStart = await checkZen();
     if (zenRunningAtStart) {
@@ -412,6 +423,7 @@ export async function watch() {
     while (true) {
         // Update heartbeat
         setProcessState(process.pid, 'running');
+        await checkForToolUpdateQuietly();
 
         if (!(await ensureRepoReady(repoPath, false))) {
             await new Promise(r => setTimeout(r, 5000));

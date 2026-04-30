@@ -28,6 +28,11 @@ function getStartupPath() {
     return null;
 }
 
+export function isStartupEnabled() {
+    const startupPath = getStartupPath();
+    return !!startupPath && fs.existsSync(startupPath);
+}
+
 async function cleanupLegacy() {
     const platform = process.platform;
     if (!LEGACY_FILES[platform]) return;

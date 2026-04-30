@@ -11,6 +11,10 @@ const schema = {
     autoSyncInterval: {
         type: 'number',
         default: 1 // live checkpoint interval in minutes; 0 = disabled
+    },
+    updateCheckIntervalHours: {
+        type: 'number',
+        default: 6 // background npm update check interval; 0 falls back to default
     }
 };
 
