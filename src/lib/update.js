@@ -247,13 +247,13 @@ export async function runSelfUpdate(options = {}) {
         return updateCheck.success;
     }
 
-    const daemonStatus = getDaemonStatus();
+    const daemonStatus = await getDaemonStatus();
     const wasRunning = daemonStatus.isRunning;
     const startupWasEnabled = isStartupEnabled();
 
     if (wasRunning) {
         console.log(chalk.blue('Stopping background watcher before update...'));
-        stopDaemon();
+        await stopDaemon({ all: true, silent: true });
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
@@ -274,7 +274,7 @@ export async function runSelfUpdate(options = {}) {
         console.log(chalk.gray(`Try manually: ${UPDATE_COMMAND} --force`));
         if (wasRunning) {
             console.log(chalk.yellow('Restarting previous watcher...'));
-            startDaemon();
+            await startDaemon({ force: true, silent: true });
         }
         return false;
     }
@@ -299,7 +299,7 @@ export async function runSelfUpdate(options = {}) {
         if (startOutput) console.log(startOutput);
         if (startResult.exitCode !== 0) {
             console.log(chalk.yellow('Could not start via global zensync command. Falling back to current process...'));
-            startDaemon();
+            await startDaemon({ force: true, silent: true });
         }
     }
 

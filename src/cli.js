@@ -55,31 +55,37 @@ program.command('watch')
 
 program.command('start')
   .description('Start the sync daemon (Background)')
-  .action(() => {
-    startDaemon();
+  .action(async () => {
+    await startDaemon();
   });
 
 program.command('stop')
   .description('Stop the background daemon')
-  .action(() => {
-    stopDaemon();
+  .action(async () => {
+    await stopDaemon({ all: true });
   });
 
 program.command('restart')
   .description('Restart the background daemon')
-  .action(() => {
-    stopDaemon();
-    setTimeout(() => startDaemon(), 1000);
+  .action(async () => {
+    await stopDaemon({ all: true });
+    await new Promise(r => setTimeout(r, 1000));
+    await startDaemon({ force: true });
   });
 
 program.command('status')
   .description('Check daemon status')
-  .action(() => {
-    const status = getDaemonStatus();
+  .action(async () => {
+    const status = await getDaemonStatus();
     console.log(chalk.bold('ZenSync Status:'));
     if (status.isRunning) {
         console.log(chalk.green('● Running') + ` (PID: ${status.pid})`);
-        console.log(chalk.gray(`Last Heartbeat: ${new Date(status.lastHeartbeat).toLocaleString()}`));
+        if (status.watcherPids?.length > 1) {
+            console.log(chalk.yellow(`Watcher processes: ${status.watcherPids.join(', ')}`));
+        }
+        if (status.lastHeartbeat) {
+          console.log(chalk.gray(`Last Heartbeat: ${new Date(status.lastHeartbeat).toLocaleString()}`));
+        }
     } else {
         console.log(chalk.red('● Stopped'));
     }
@@ -159,7 +165,7 @@ program.command('uninstall')
 
     // 1. Stop daemon
     console.log(chalk.blue('\n[1/4] Stopping daemon...'));
-    stopDaemon();
+    await stopDaemon({ all: true });
     console.log(chalk.green('  Done.'));
 
     // 2. Disable startup

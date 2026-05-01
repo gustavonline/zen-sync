@@ -1,6 +1,6 @@
 {
   "name": "@gustavonline/zen-sync",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "description": "Minimal background sync for Zen Browser profiles across macOS, Windows, and Linux.",
   "main": "./src/cli.js",
   "scripts": {

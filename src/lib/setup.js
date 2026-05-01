@@ -1333,9 +1333,9 @@ export async function setup(options = {}) {
     }
 
     if (shouldStartNow) {
-        const status = getDaemonStatus();
-        if (status.isRunning) stopDaemon();
-        startDaemon();
+        const status = await getDaemonStatus();
+        if (status.isRunning) await stopDaemon({ all: true });
+        await startDaemon({ force: true });
     } else {
         row('⏭️', DIM('Background watcher not started.'));
     }

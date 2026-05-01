@@ -58,7 +58,7 @@ npm link
 zensync restart
 ```
 
-To update an npm install:
+To update an npm install (recommended):
 
 ```bash
 zensync update

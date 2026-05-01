@@ -29,14 +29,14 @@ NPM install/update:
 
 ```bash
 npm install -g @gustavonline/zen-sync
-# later:
+# later (recommended):
 zensync update
 ```
 
-Manual update equivalent:
+Manual alternative:
 
 ```bash
-npm install -g @gustavonline/zen-sync
+npm update -g @gustavonline/zen-sync
 zensync restart
 ```
 
