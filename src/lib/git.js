@@ -126,11 +126,39 @@ function backupPaths(cwd, files = [], recoveryDir) {
     return copied;
 }
 
+function copyEntry(source, destination) {
+    if (!fs.existsSync(source)) return;
+
+    const stat = fs.lstatSync(source);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+
+    if (stat.isDirectory()) {
+        fs.mkdirSync(destination, { recursive: true });
+        for (const child of fs.readdirSync(source)) {
+            copyEntry(path.join(source, child), path.join(destination, child));
+        }
+    } else if (stat.isSymbolicLink()) {
+        fs.rmSync(destination, { recursive: true, force: true });
+        fs.symlinkSync(fs.readlinkSync(source), destination);
+    } else {
+        fs.copyFileSync(source, destination);
+    }
+}
+
+function copyWorktree(sourceDir, destinationDir) {
+    fs.mkdirSync(destinationDir, { recursive: true });
+
+    for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+        if (entry.name === '.git' || entry.name === '.zensync-recovery') continue;
+        copyEntry(path.join(sourceDir, entry.name), path.join(destinationDir, entry.name));
+    }
+}
+
 function parseUntrackedOverwritePaths(errorText = '') {
     if (!errorText) return [];
 
     const lines = String(errorText).split(/\r?\n/);
-    const start = lines.findIndex(line => line.includes('would be overwritten by merge'));
+    const start = lines.findIndex(line => /would be overwritten by (merge|checkout|switch)/i.test(line));
     if (start === -1) return [];
 
     const files = [];
@@ -161,7 +189,39 @@ export function isUnmergedConflictError(errorText = '') {
 
 export function isUntrackedOverwriteError(errorText = '') {
     const text = String(errorText).toLowerCase();
-    return text.includes('untracked working tree files would be overwritten by merge');
+    return /untracked working tree files would be overwritten by (merge|checkout|switch)/i.test(text);
+}
+
+function isRebaseApplyConflict(errorText = '') {
+    const text = String(errorText).toLowerCase();
+    return text.includes('could not apply') || text.includes('resolve all conflicts manually');
+}
+
+async function recoverDivergedPullPreservingWorktree(cwd, branch) {
+    if (!branch) return { success: false, error: 'Cannot recover diverged pull without a current branch' };
+
+    const recoveryDir = makeRecoveryDir(cwd, 'diverged-pull');
+    const worktreeBackup = path.join(recoveryDir, 'worktree');
+
+    try {
+        copyWorktree(cwd, worktreeBackup);
+        try {
+            await execa('git', ['rebase', '--abort'], { cwd });
+        } catch {
+            // Rebase may already have been auto-aborted by git. Continue recovery.
+        }
+
+        await execa('git', ['fetch', 'origin', branch], { cwd });
+        await execa('git', ['reset', '--hard', `origin/${branch}`], { cwd });
+        await execa('git', ['clean', '-fd', '-e', '.zensync-recovery/'], { cwd });
+        copyWorktree(worktreeBackup, cwd);
+        cleanupStaleRebaseState(cwd);
+        cleanupStaleIndexLock(cwd, 0);
+
+        return { success: true, recovered: true, recoveryDir };
+    } catch (error) {
+        return { success: false, recovered: true, recoveryDir, error: formatGitError(error) };
+    }
 }
 
 export async function gitAdd(cwd) {
@@ -235,9 +295,23 @@ export async function gitPull(cwd) {
                         movedPaths: recovered.paths
                     };
                 } catch (retryError) {
-                    return { success: false, error: formatGitError(retryError) };
+                    const retryText = formatGitError(retryError);
+                    if (isRebaseApplyConflict(retryText)) {
+                        const divergedRecovery = await recoverDivergedPullPreservingWorktree(cwd, branch);
+                        return divergedRecovery.success
+                            ? { success: true, recovered: true, recoveryDir: divergedRecovery.recoveryDir }
+                            : { success: false, error: divergedRecovery.error || retryText };
+                    }
+                    return { success: false, error: retryText };
                 }
             }
+        }
+
+        if (isRebaseApplyConflict(firstError)) {
+            const divergedRecovery = await recoverDivergedPullPreservingWorktree(cwd, branch);
+            return divergedRecovery.success
+                ? { success: true, recovered: true, recoveryDir: divergedRecovery.recoveryDir }
+                : { success: false, error: divergedRecovery.error || firstError };
         }
 
         return { success: false, error: firstError };

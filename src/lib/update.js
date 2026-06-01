@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
-import notifier from 'node-notifier';
+import { notify } from './notify.js';
 import { execa } from 'execa';
 import config from './config.js';
 import state from './state.js';
@@ -183,7 +183,7 @@ export async function notifyIfUpdateAvailable() {
     const manual = `Manual update: ${UPDATE_COMMAND}`;
 
     log(`⬆️ ${message}. ${manual}`, 'warning');
-    notifier.notify({
+    notify({
         title: 'ZenSync update available',
         message: `${message}\n${manual}`,
         wait: true

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import psList from 'ps-list';
-import notifier from 'node-notifier';
+import { notify as sendNotification } from './notify.js';
 import config from './config.js';
 import {
     gitAdd,
@@ -76,7 +76,7 @@ async function warnIfLatestSnapshotIsLive(repoPath) {
     log(`⚠️ ${msg}`, 'warning');
 
     if (metadata.machineId !== getMachineId()) {
-        notifier.notify({
+        sendNotification({
             title: 'ZenSync live checkpoint',
             message: msg,
             wait: true
@@ -114,7 +114,7 @@ async function ensureRepoReady(repoPath, notify = false) {
         }
 
         if (notify && shouldAnnounce) {
-            notifier.notify({
+            sendNotification({
                 title: 'ZenSync',
                 message: 'Git rebase got stuck. ZenSync attempted auto-recovery. Check logs.',
                 wait: true
@@ -141,7 +141,7 @@ async function ensureRepoReady(repoPath, notify = false) {
         }
 
         if (notify && shouldAnnounce) {
-            notifier.notify({
+            sendNotification({
                 title: 'ZenSync',
                 message: recovery.success
                     ? 'Git conflict state was auto-recovered. Sync will retry.'
@@ -165,7 +165,7 @@ async function ensureRepoReady(repoPath, notify = false) {
     }
 
     if (notify && shouldAnnounce) {
-        notifier.notify({
+        sendNotification({
             title: 'ZenSync',
             message: 'Git is in detached HEAD state. Check logs for recovery steps.',
             wait: true
@@ -217,7 +217,7 @@ async function ensureClientVersionAllowed(repoPath) {
                 ? `${versionGate.reason.slice(0, 177)}...`
                 : versionGate.reason;
 
-            notifier.notify({
+            sendNotification({
                 title: 'ZenSync update required',
                 message: shortReason,
                 wait: true
@@ -267,7 +267,7 @@ async function performSync(repoPath, message, notify = true, options = {}) {
                     lockIssueActive = false;
                     log(`❌ Pull failed: ${pullResult.error}`, 'error');
                     if (notify) {
-                        notifier.notify({
+                        sendNotification({
                             title: 'ZenSync',
                             message: 'Could not pull latest cloud changes. Check logs.',
                             wait: true
@@ -322,7 +322,7 @@ async function performSync(repoPath, message, notify = true, options = {}) {
         if (!commitResult.success) {
             log(`❌ Commit failed: ${commitResult.error}`, 'error');
             if (notify) {
-                notifier.notify({
+                sendNotification({
                     title: 'ZenSync',
                     message: 'Hiccup! 🐸\nCommit failed. Check logs.',
                     wait: true
@@ -334,14 +334,14 @@ async function performSync(repoPath, message, notify = true, options = {}) {
         const pushResult = await gitPush(repoPath);
         if (pushResult.success) {
             log('✅ Synced to cloud.', 'success');
-            if (notify) notifier.notify({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
+            if (notify) sendNotification({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
             updateLastSync(Date.now());
             return true;
         }
 
         log(`❌ Push failed: ${pushResult.error}`, 'error');
         if (notify) {
-            notifier.notify({
+            sendNotification({
                 title: 'ZenSync',
                 message: 'Cloud seems a bit foggy? ☁️\nCheck logs or internet.',
                 wait: true
@@ -358,7 +358,7 @@ async function performSync(repoPath, message, notify = true, options = {}) {
         }
 
         if (notify) {
-            notifier.notify({
+            sendNotification({
                 title: 'ZenSync',
                 message: msg,
                 wait: true
