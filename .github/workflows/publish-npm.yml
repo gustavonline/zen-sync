@@ -2,6 +2,7 @@ name: Publish to npm
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -13,6 +14,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm-publish
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,9 +22,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -30,7 +32,20 @@ jobs:
       - name: Test
         run: npm test
 
+      - id: package
+        name: Read package metadata
+        run: node -e "const p=require('./package.json'); console.log('version='+p.version); console.log('name='+p.name)" >> "$GITHUB_OUTPUT"
+
+      - id: published
+        name: Check if version already exists
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} already exists on npm; skipping publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: steps.published.outputs.exists == 'false'
+        run: npm publish --provenance --access public

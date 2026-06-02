@@ -73,6 +73,30 @@ zensync restart
 
 The background watcher checks for new npm versions and notifies you with the update command.
 
+## Release / npm publishing
+
+Publishing is handled by GitHub Actions with npm Trusted Publishing/OIDC. No long-lived npm token is needed.
+
+Release flow:
+
+```bash
+npm test
+npm version patch
+git push origin main --follow-tags
+```
+
+The `publish-npm.yml` workflow runs on pushes to `main` and release tags. It checks whether the package version already exists on npm and only publishes new versions with provenance.
+
+npm Trusted Publisher settings:
+
+```txt
+Package: @gustavonline/zen-sync
+Repository: gustavonline/zen-sync
+Workflow filename: publish-npm.yml
+Environment: npm-publish
+Allowed action: npm publish
+```
+
 ## First setup on any machine
 
 1. Open Zen Browser once, then close it.
