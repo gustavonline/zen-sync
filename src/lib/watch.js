@@ -26,6 +26,74 @@ import { setProcessState, clearProcessState, updateLastSync } from './state.js';
 
 const SNAPSHOT_FILE = '.zensync-snapshot.json';
 const MIN_LIVE_CHECKPOINT_INTERVAL_MS = 15 * 1000;
+const SYNC_LOCK_FILE = '.zensync-sync.lock';
+const SYNC_LOCK_STALE_MS = 10 * 60 * 1000;
+
+function isPidAlive(pid) {
+    if (!pid) return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function readSyncLock(lockPath) {
+    try {
+        return JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function removeStaleSyncLock(lockPath) {
+    if (!fs.existsSync(lockPath)) return false;
+
+    const lock = readSyncLock(lockPath);
+    const ageMs = lock?.createdAt ? Date.now() - Date.parse(lock.createdAt) : Infinity;
+    const alive = lock?.pid ? isPidAlive(lock.pid) : false;
+
+    if (!alive || ageMs > SYNC_LOCK_STALE_MS) {
+        try {
+            fs.rmSync(lockPath, { force: true });
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+async function withSyncLock(repoPath, label, task) {
+    const lockPath = path.join(repoPath, '.git', SYNC_LOCK_FILE);
+    removeStaleSyncLock(lockPath);
+
+    let fd;
+    try {
+        fd = fs.openSync(lockPath, 'wx');
+        fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, label, createdAt: new Date().toISOString() }));
+    } catch (error) {
+        if (error?.code === 'EEXIST') {
+            const lock = readSyncLock(lockPath);
+            log(`⏭️ Skipping ${label}; another ZenSync sync is already running${lock?.pid ? ` (PID: ${lock.pid})` : ''}.`, 'warning');
+            return false;
+        }
+        throw error;
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+
+    try {
+        return await task();
+    } finally {
+        const lock = readSyncLock(lockPath);
+        if (!lock?.pid || lock.pid === process.pid) {
+            fs.rmSync(lockPath, { force: true });
+        }
+    }
+}
 
 let wasRunning = false;
 let lastIdlePullAt = 0;
@@ -238,13 +306,14 @@ async function ensureClientVersionAllowed(repoPath) {
 }
 
 async function performSync(repoPath, message, notify = true, options = {}) {
-    const {
-        pullFirst = true,
-        snapshotType = null,
-        skipIfNoMeaningfulChanges = false
-    } = options;
+    return withSyncLock(repoPath, message, async () => {
+        const {
+            pullFirst = true,
+            snapshotType = null,
+            skipIfNoMeaningfulChanges = false
+        } = options;
 
-    try {
+        try {
         if (!(await ensureRepoReady(repoPath, notify))) {
             return false;
         }
@@ -339,6 +408,23 @@ async function performSync(repoPath, message, notify = true, options = {}) {
             return true;
         }
 
+        if (/fetch first|non-fast-forward|failed to push some refs/i.test(pushResult.error || '')) {
+            log('⚠️ Remote changed before push finished. Pulling latest cloud changes and retrying once...', 'warning');
+            const retryPull = await gitPull(repoPath);
+            if (retryPull.success) {
+                const retryPush = await gitPush(repoPath);
+                if (retryPush.success) {
+                    log('✅ Synced to cloud.', 'success');
+                    if (notify) sendNotification({ title: 'ZenSync', message: 'Zen Mode: Synchronized! 🧘✨' });
+                    updateLastSync(Date.now());
+                    return true;
+                }
+                pushResult.error = retryPush.error;
+            } else {
+                pushResult.error = retryPull.error;
+            }
+        }
+
         log(`❌ Push failed: ${pushResult.error}`, 'error');
         if (notify) {
             sendNotification({
@@ -365,7 +451,8 @@ async function performSync(repoPath, message, notify = true, options = {}) {
             });
         }
     }
-    return false;
+        return false;
+    });
 }
 
 export async function watch() {
@@ -410,14 +497,16 @@ export async function watch() {
         wasRunning = true;
         log('Zen Browser already running on startup. Skipping initial pull for safety.', 'warning');
     } else {
-        const initialPull = await gitPull(repoPath);
-        if (!initialPull.success) {
-            log(`⚠️ Initial pull failed: ${initialPull.error}`, 'warning');
-            await ensureRepoReady(repoPath, false);
-        } else {
-            lastIdlePullAt = Date.now();
-            await warnIfLatestSnapshotIsLive(repoPath);
-        }
+        await withSyncLock(repoPath, 'initial pull', async () => {
+            const initialPull = await gitPull(repoPath);
+            if (!initialPull.success) {
+                log(`⚠️ Initial pull failed: ${initialPull.error}`, 'warning');
+                await ensureRepoReady(repoPath, false);
+            } else {
+                lastIdlePullAt = Date.now();
+                await warnIfLatestSnapshotIsLive(repoPath);
+            }
+        });
     }
 
     while (true) {
@@ -473,14 +562,16 @@ export async function watch() {
             // Idle pull (throttled)
             const now = Date.now();
             if (now - lastIdlePullAt >= IDLE_PULL_INTERVAL_MS) {
-                const idlePull = await gitPull(repoPath);
-                lastIdlePullAt = now;
+                await withSyncLock(repoPath, 'idle pull', async () => {
+                    const idlePull = await gitPull(repoPath);
+                    lastIdlePullAt = now;
 
-                if (!idlePull.success && (idlePull.error.includes('rebase') || isUnmergedConflictError(idlePull.error))) {
-                    await ensureRepoReady(repoPath, false);
-                } else if (idlePull.success) {
-                    await warnIfLatestSnapshotIsLive(repoPath);
-                }
+                    if (!idlePull.success && (idlePull.error.includes('rebase') || isUnmergedConflictError(idlePull.error))) {
+                        await ensureRepoReady(repoPath, false);
+                    } else if (idlePull.success) {
+                        await warnIfLatestSnapshotIsLive(repoPath);
+                    }
+                });
             }
         }
 
