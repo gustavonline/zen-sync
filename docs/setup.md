@@ -206,12 +206,15 @@ cache2/
 gmp/
 ```
 
-ZenSync includes closed-browser session files so tabs/workspaces can restore on the next machine:
+ZenSync includes the stable closed-browser session files needed to restore tabs/workspaces on the next machine:
 
 ```text
 sessionstore.jsonlz4
 sessionCheckpoints.json
-sessionstore-backups/
 zen-sessions.jsonlz4
-zen-sessions-backup/
 ```
+
+The browser-managed `sessionstore-backups/` and `zen-sessions-backup/` folders stay on each
+machine but are ignored by Git. Their frequently rewritten compressed recovery files can otherwise
+inflate repository history very quickly. Close Zen before switching machines so ZenSync can push a
+clean final snapshot.

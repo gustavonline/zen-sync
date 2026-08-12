@@ -19,7 +19,9 @@ function getZenConfigDirCandidates() {
     if (p === 'win32') return [path.join(home, 'AppData', 'Roaming', 'Zen')];
     if (p === 'darwin') return [path.join(home, 'Library', 'Application Support', 'zen')];
     if (p === 'linux') return [
+        path.join(home, '.config', 'zen'),
         path.join(home, '.zen'),
+        path.join(home, '.var', 'app', 'app.zen_browser.zen', '.zen'),
         path.join(home, '.var', 'app', 'app.zen_browser.zen', 'zen'),
         path.join(home, '.var', 'app', 'io.github.zen_browser.zen', '.zen'),
         path.join(home, '.var', 'app', 'io.github.zen_browser.zen', 'zen'),
@@ -660,6 +662,10 @@ async function setupRepository(repoPath, options = {}) {
     const empty = isDirEmpty(repoPath);
 
     if (isGit && hasProfile) {
+        if (options.yes) {
+            return await refreshConfiguredRepo(repoPath, options);
+        }
+
         const origin = await getOriginUrl(repoPath);
         card([
             `${OK('This folder already looks like a ZenSync repo.')}`,
@@ -940,8 +946,13 @@ async function createNewRepo(repoPath, options = {}) {
             '# OS',
             '.DS_Store', 'Thumbs.db', 'node_modules/',
             '',
-            '# ZenSync intentionally DOES sync closed-browser session files so tabs restore across devices:',
-            '# sessionstore.jsonlz4, sessionCheckpoints.json, sessionstore-backups/, zen-sessions*.jsonlz4',
+            '# Sync stable closed-browser session snapshots, but not browser-managed backup churn.',
+            '# The backup folders contain frequently rewritten compressed recovery blobs that can',
+            '# otherwise grow Git history by hundreds of megabytes.',
+            'sessionstore-backups/',
+            'zen-sessions-backup/',
+            '',
+            '# Still synced: sessionstore.jsonlz4, sessionCheckpoints.json, zen-sessions.jsonlz4',
             '',
             '# Session restore diagnostics',
             'sessionstore-logs/',
@@ -1163,7 +1174,7 @@ async function linkProfile(repoPath) {
             `${DIM('    Open Zen Browser once, then re-run setup.')}`,
             `${DIM('    ZenSync needs profiles.ini to point Zen at the repo.')}`,
         ], chalk.yellow);
-        return;
+        return false;
     }
 
     const repoProfileEmpty = !fs.existsSync(repoProfilePath) || fs.readdirSync(repoProfilePath).length === 0;
@@ -1192,7 +1203,7 @@ async function linkProfile(repoPath) {
         if (!forceLink) {
             row('🛡️', OK('Skipped — your browser data is safe.'));
             row('  ', DIM('Import or push profile data first, then run zensync setup again.'));
-            return;
+            return false;
         }
     }
 
@@ -1205,7 +1216,7 @@ async function linkProfile(repoPath) {
             ``,
             `${DIM('    Open Zen Browser once, close it, then re-run setup.')}`,
         ], chalk.yellow);
-        return;
+        return false;
     }
 
     const s = spinner('Pointing Zen Browser at the synced profile...');
@@ -1221,8 +1232,10 @@ async function linkProfile(repoPath) {
         if (profileBackup || installsBackup) {
             row('🛡️', DIM('Backed up Zen profile config before editing.'));
         }
+        return true;
     } catch (error) {
         s.fail('Failed to update Zen profile config: ' + error.message);
+        return false;
     }
 }
 
@@ -1298,7 +1311,18 @@ export async function setup(options = {}) {
 
     step(4, T, '🔗', 'Browser Link');
     process.chdir(repoPath);
-    await linkProfile(repoPath);
+    const linked = await linkProfile(repoPath);
+    if (!linked) {
+        gap();
+        card([
+            `${WARN('Setup stopped before background sync was enabled.')}`,
+            '',
+            `${DIM('Fix the browser-link issue above, then run:')}`,
+            `    ${CYAN('zensync setup')}`,
+        ], chalk.yellow);
+        gap();
+        return;
+    }
 
     step(5, T, '⚙️', 'Background Sync');
 
@@ -1333,9 +1357,14 @@ export async function setup(options = {}) {
     }
 
     if (shouldStartNow) {
-        const status = await getDaemonStatus();
-        if (status.isRunning) await stopDaemon({ all: true });
-        await startDaemon({ force: true });
+        if (process.platform === 'linux' && shouldEnableStartup) {
+            await execa('systemctl', ['--user', 'restart', 'zensync.service']);
+            row('✅', OK('ZenSync systemd service restarted.'));
+        } else {
+            const status = await getDaemonStatus();
+            if (status.isRunning) await stopDaemon({ all: true });
+            await startDaemon({ force: true });
+        }
     } else {
         row('⏭️', DIM('Background watcher not started.'));
     }
