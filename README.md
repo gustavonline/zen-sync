@@ -123,6 +123,9 @@ ZenSync points Zen directly at `~/zensync-data/profile` and then keeps that repo
 - Close Zen on the current machine before opening it on another machine.
 - ZenSync pushes a `Final Sync (Closed)` commit when Zen closes.
 - While Zen is open, ZenSync may push `Live Checkpoint` commits. They are fallback snapshots, not clean finals.
+- Browser-managed session backup folders are kept locally but ignored by Git to prevent large,
+  frequently rewritten recovery blobs from inflating the profile repo. Close Zen before switching
+  machines so the stable final session snapshots are written and synced.
 - While Zen is closed, ZenSync pulls remote changes every few seconds so the next launch is fresh.
 - If the newest remote commit is only a live checkpoint, ZenSync logs/notifies you so you know the other machine was probably slept/shut down without closing Zen.
 

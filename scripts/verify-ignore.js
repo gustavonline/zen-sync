@@ -55,14 +55,16 @@ async function run() {
         'profile/storage/example.sqlite',
         'profile/cache2/entries/example',
         'profile/gmp/example',
-        'profile/AlternateServices.bin'
+        'profile/AlternateServices.bin',
+        'profile/sessionstore-backups/recovery.jsonlz4',
+        'profile/sessionstore-backups/recovery.baklz4',
+        'profile/zen-sessions-backup/clean.jsonlz4'
     ];
 
     const syncableSession = [
         'profile/sessionstore.jsonlz4',
-        'profile/sessionstore-backups/recovery.jsonlz4',
-        'profile/zen-sessions.jsonlz4',
-        'profile/zen-sessions-backup/clean.jsonlz4'
+        'profile/sessionCheckpoints.json',
+        'profile/zen-sessions.jsonlz4'
     ];
 
     for (const file of localOnly) {
